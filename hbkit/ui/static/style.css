@@ -36,6 +36,8 @@
 }
 
 * { box-sizing: border-box; }
+/* Elements given a display (e.g. .pill) must still disappear when hidden. */
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
   background: var(--bg);

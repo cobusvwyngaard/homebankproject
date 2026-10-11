@@ -443,9 +443,17 @@ before you import it, and HomeBank keeps them.
      transaction HomeBank has for each and whether a file has been added. The ticks are
      remembered; at first they are the open accounts with recent transactions.
 3. **Add files** (or drag them onto the page). The toolkit keeps a copy in
-   `data\out\imports\<month>\originals`; your downloads are not changed. It reads
-   **QIF** files and HomeBank's own **CSV** layout (8 columns: date; payment mode; info;
-   payee; memo; amount; category; tags).
+   `data\out\imports\<month>\originals`; your downloads are not changed. It reads:
+   * **QIF** files;
+   * HomeBank's own **CSV** layout (8 columns: date; payment mode; info; payee; memo;
+     amount; category; tags);
+   * a **bank's own CSV** layout with a header row naming its columns, such as
+     "Value Date", "Type", "Description", "Beneficiary or CardHolder", "Amount".
+     HomeBank cannot import those, so the prepared file is a **conversion** to
+     HomeBank's CSV layout: dates as day-month-year, the description as memo, the
+     beneficiary column as payee, the bank's transaction type as the payment mode
+     (debit order, transfer, EFT, card, fee …), and the categories. The time column is
+     not used.
 4. Check the **account** of each file. It is suggested from:
    * the file name: the same name, or a similar one (dates and copy numbers such as
      " (1)" ignored), that you linked to an account in an earlier month; or
@@ -488,8 +496,12 @@ are written; the screen shows only counts. Use the browser to see and change the
 
 ### Good to know
 
-* Other formats (OFX, or a bank's own CSV layout) are not read yet. To add one, describe
-  its columns to Claude, or give a made-up example line — not a real statement.
+* OFX is not read yet, nor bank CSV files whose header names other columns (for
+  example separate debit and credit columns). To add one, describe its columns to
+  Claude, or give a made-up example line — not a real statement.
+* For a bank CSV, everything in the "Beneficiary or CardHolder" column becomes the
+  payee. If your card purchases carry your own name there, tell Claude, and it can be
+  left out for those.
 * HomeBank's import also lets you choose the account; choose the same one.
 * A category name the toolkit writes always exists in your HomeBank file (HomeBank
   would otherwise create a new category).
@@ -690,7 +702,7 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 | `the settings file is not valid TOML (… line N …)` | Check that line in `data\settings.toml`: text in "double quotes", lists in [ ], one setting per line. |
 | `the CPI file named in the settings was not found` | Put the CSV next to `settings.toml`, or give its full path. |
 | A report says some names were not found | Check the spelling against HomeBank (capitals do not matter); see the list at the top of the report. |
-| `this is neither a QIF file nor a HomeBank CSV file` | The toolkit reads QIF and HomeBank's 8-column CSV only. Download that format from your bank, or ask Claude to add the bank's layout (describe the columns; do not send a real file). |
+| `this is neither a QIF file, a HomeBank CSV file … nor a bank CSV with a header row …` | The toolkit reads QIF, HomeBank's 8-column CSV, and bank CSV files whose first row names the date, description and amount columns. For another layout, ask Claude to add it (describe the columns; do not send a real file). |
 | `could not tell which account this file belongs to` | Give it with `--account "name as in HomeBank"`, or choose it on the Imports page. |
 | `the HomeBank file has changed since the rules were listed` | Reload the Fill categories page (or run `fill-categories` without `--review`) and choose again. |
 | `the HomeBank file has changed since the transfers were listed` | List the transfers again (*Find again* on the Transfers page, or run `link-transfers` without `--review`). |

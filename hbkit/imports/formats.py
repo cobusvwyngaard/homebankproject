@@ -16,13 +16,20 @@ What HomeBank does with them (hb-import.c, hb-import-qif.c, hb-import-csv.c, 5.1
 * On import HomeBank keeps a category from the file. "Auto from payee" and
   "set category" rules only fill empty categories; only "overwrite category" rules
   replace it.
+* **A bank's own CSV layout** (a header row naming the columns, e.g. "Value Date",
+  "Type", "Description", "Beneficiary or CardHolder", "Amount") cannot be imported by
+  HomeBank at all. Such a file is *converted* to HomeBank CSV when it is prepared: one
+  line per transaction, dates as day-month-year, the bank's transaction type turned
+  into a payment mode, and the categories in column 7.
 
-Preparing a file only adds categories: every other byte stays as it was, and the
-result is read back and compared before it is used.
+Preparing a QIF or HomeBank CSV file only adds categories: every other byte stays as
+it was. Every prepared file is read back and compared before it is used.
 """
 
 from __future__ import annotations
 
+import csv
+import io
 import re
 from dataclasses import dataclass, field
 from datetime import date
@@ -33,6 +40,21 @@ QIF_TRANSACTION_TYPES = {"bank", "cash", "ccard", "oth a", "oth l"}
 CSV_COLUMNS = 8
 CSV_CATEGORY = 6
 CSV_TRANSFER_PAYMODE = 5
+
+#: Column names (lower case) recognised in the header row of a bank's own CSV export.
+BANK_COLUMNS = {
+    "date": ("value date", "transaction date", "date"),
+    "type": ("type", "transaction type"),
+    "memo": ("description",),
+    "payee": ("beneficiary or cardholder", "beneficiary"),
+    "amount": ("amount",),
+}
+#: Words in the bank's transaction type and the HomeBank payment mode they become
+#: (enums.h); the first match wins, otherwise 0 (none).
+BANK_TYPE_PAYMODES = (
+    ("debit order", 11), ("transfer", 4), ("re-direct", 4), ("eft", 8), ("payment", 8), ("card", 6),
+    ("pos", 6), ("atm", 3), ("cash", 3), ("fee", 10), ("charge", 10), ("deposit", 9),
+)
 
 
 class ImportFormatError(HbkitError):
@@ -53,6 +75,7 @@ class ImportTxn:
     category: str = ""  # category already in the file
     transfer: bool = False  # internal transfer: never given a category
     split: bool = False  # split transaction: its categories are in the split lines
+    paymode: int = 0
 
     @property
     def can_take_category(self) -> bool:
@@ -62,13 +85,14 @@ class ImportTxn:
 @dataclass
 class ImportFile:
     name: str
-    format: str  # "qif" or "csv"
+    format: str  # "qif", "csv" (HomeBank's layout) or "bank-csv" (a bank's own layout, converted)
     raw: bytes
     encoding: str  # "utf-8" or "cp1252"
     txns: list[ImportTxn]
     date_order: str = "DMY"  # DMY, MDY or YMD
     qif_type: str = ""  # QIF: Bank, CCard, ...
     separator: str = ""  # CSV
+    layout: str = ""  # bank CSV: the columns used, e.g. "Value Date, Description, Amount"
     #: line numbers HomeBank would not read as transactions (no values)
     problems: list[int] = field(default_factory=list)
     #: where a category goes, per transaction: ("insert", line) before that line,
@@ -164,7 +188,7 @@ def _text(line: bytes, encoding: str) -> str:
 
 
 def read_import_file(name: str, raw: bytes) -> ImportFile:
-    """Read a QIF or HomeBank CSV file. The format is detected from the contents."""
+    """Read a QIF, HomeBank CSV or bank CSV file. The format is detected from the contents."""
     encoding = _decode(raw)
     lines = raw.splitlines(keepends=True)
     first = next((_text(x, encoding).strip() for x in lines if x.strip()), "")
@@ -172,10 +196,11 @@ def read_import_file(name: str, raw: bytes) -> ImportFile:
         first = first[1:]
     if first.startswith("!"):
         return _read_qif(name, raw, lines, encoding)
-    f = _read_csv(name, raw, lines, encoding)
+    f = _read_csv(name, raw, lines, encoding) or _read_bank_csv(name, raw, encoding)
     if f is None:
-        raise ImportFormatError("this is neither a QIF file nor a HomeBank CSV file (8 columns: date; payment "
-                                "mode; info; payee; memo; amount; category; tags)")
+        raise ImportFormatError("this is neither a QIF file, a HomeBank CSV file (8 columns: date; payment mode; "
+                                "info; payee; memo; amount; category; tags) nor a bank CSV with a header row "
+                                "naming its date, description and amount columns")
     return f
 
 
@@ -287,7 +312,7 @@ def _read_csv(name: str, raw: bytes, lines: list[bytes], encoding: str) -> Impor
         txn = ImportTxn(
             index=len(f.txns), line=i + 1, date=parse_date(v[0], order), amount=parse_amount(v[5]),
             memo=v[4], payee=v[3], info=v[2], category=v[CSV_CATEGORY],
-            transfer=paymode == CSV_TRANSFER_PAYMODE,
+            transfer=paymode == CSV_TRANSFER_PAYMODE, paymode=paymode,
         )
         if txn.date is None or txn.amount is None:
             f.problems.append(i + 1)
@@ -299,13 +324,61 @@ def _read_csv(name: str, raw: bytes, lines: list[bytes], encoding: str) -> Impor
     return f
 
 
+def bank_paymode(kind: str) -> int:
+    kind = kind.casefold()
+    for word, paymode in BANK_TYPE_PAYMODES:
+        if re.search(rf"(?<![a-z]){re.escape(word)}(?![a-z])", kind):
+            return paymode
+    return 0
+
+
+def _read_bank_csv(name: str, raw: bytes, encoding: str) -> ImportFile | None:
+    """A bank's own CSV export with a header row (see BANK_COLUMNS)."""
+    text = raw.decode("utf-8-sig" if encoding == "utf-8" else encoding, errors="replace")
+    first = next((x for x in text.splitlines() if x.strip()), "")
+    sep = max((",", ";", "\t"), key=first.count)
+    reader = csv.reader(io.StringIO(text, newline=""), delimiter=sep)
+    header, columns = None, {}
+    for row in reader:
+        if any(c.strip() for c in row):
+            header = [c.strip().casefold() for c in row]
+            break
+    if header is None:
+        return None
+    for key, names in BANK_COLUMNS.items():
+        found = next((header.index(n) for n in names if n in header), None)
+        if found is not None:
+            columns[key] = found
+    if not {"date", "memo", "amount"} <= set(columns):
+        return None
+    rows = []
+    for row in reader:
+        if any(c.strip() for c in row):
+            rows.append((reader.line_num, row))
+    width = max(columns.values()) + 1
+    get = lambda row, key: row[columns[key]].strip() if key in columns and len(row) > columns[key] else ""  # noqa: E731
+    order = date_order([get(r, "date") for _, r in rows])
+    f = ImportFile(name, "bank-csv", raw, encoding, [], date_order=order, separator=sep,
+                   layout=", ".join(first.split(sep)[i].strip().strip('"').lstrip("\ufeff")
+                                    for i in sorted(columns.values())))
+    for line, row in rows:
+        when, amount = parse_date(get(row, "date"), order), parse_amount(get(row, "amount"))
+        if len(row) < width or when is None or amount is None:
+            f.problems.append(line)
+            continue
+        f.txns.append(ImportTxn(index=len(f.txns), line=line, date=when, amount=amount,
+                                memo=" ".join(get(row, "memo").split()), payee=" ".join(get(row, "payee").split()),
+                                paymode=bank_paymode(get(row, "type"))))
+    return f if f.txns else None
+
+
 # --- writing -------------------------------------------------------------------------------------
 
 
 def _check_category(f: ImportFile, category: str) -> bytes:
     if not category or category != category.strip() or any(ord(c) < 32 for c in category):
         raise ImportFormatError("a category name is empty, has spaces around it or contains control characters")
-    if f.format == "qif" and category.startswith("["):
+    if category.startswith("["):
         raise ImportFormatError("a category name starting with [ would be read as a transfer")
     try:
         data = category.encode(f.encoding)
@@ -328,8 +401,11 @@ def with_categories(f: ImportFile, categories: dict[int, str]) -> bytes:
     """The file with these categories (transaction index -> full category name) added.
 
     Only transactions without a category, transfer or split can take one. The result
-    is read back and compared with the original before it is returned.
+    is read back and compared with the original before it is returned. A bank CSV is
+    converted to HomeBank CSV.
     """
+    if f.format == "bank-csv":
+        return _to_homebank_csv(f, categories)
     lines = f.lines
     inserts: dict[int, list[bytes]] = {}
     for index, category in categories.items():
@@ -353,6 +429,38 @@ def with_categories(f: ImportFile, categories: dict[int, str]) -> bytes:
         out.append(line)
     data = b"".join(out)
     _verify(f, data, categories)
+    return data
+
+
+def _csv_field(value: str) -> str:
+    value = " ".join(value.split())  # HomeBank reads one line per transaction
+    return f'"{value.replace(chr(34), chr(34) * 2)}"' if (";" in value or '"' in value) else value
+
+
+def _to_homebank_csv(f: ImportFile, categories: dict[int, str]) -> bytes:
+    """A bank CSV converted to HomeBank CSV (semicolons, day-month-year, UTF-8, CRLF)."""
+    for index, category in categories.items():
+        if not 0 <= index < len(f.txns) or not f.txns[index].can_take_category:
+            raise ImportFormatError(f"transaction {index + 1} cannot take a category")
+        _check_category(f, category)
+    lines = []
+    for t in f.txns:
+        cents = round(t.amount * 100)
+        amount = f"{cents / 100:.2f}" if abs(t.amount * 100 - cents) < 1e-6 else repr(t.amount)
+        lines.append(";".join([
+            t.date.strftime("%d-%m-%Y"),
+            str(t.paymode), "", _csv_field(t.payee), _csv_field(t.memo), amount,
+            _csv_field(categories.get(t.index, "")), "",
+        ]))
+    data = ("\r\n".join(lines) + "\r\n").encode("utf-8")
+    again = read_import_file(f.name, data)
+    ok = again.format == "csv" and len(again.txns) == len(f.txns)
+    for old, new in zip(f.txns, again.txns) if ok else ():
+        ok = ok and (old.date, round(old.amount, 2), old.memo, old.payee, old.paymode) == \
+            (new.date, round(new.amount, 2), new.memo, new.payee, new.paymode) \
+            and new.category == categories.get(old.index, "")
+    if not ok:
+        raise ImportFormatError("the converted file did not read back the same; nothing was written")
     return data
 
 

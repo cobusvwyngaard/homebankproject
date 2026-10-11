@@ -505,3 +505,26 @@ class FillPageTests(ServerTestCase):
         self.assertEqual(status, 400)
         self.assertIn("has changed", res["error"])
         self.assertIsNone(self.api("/api/fill/apply", {"rules": []})["output"])
+
+
+class BankCsvImportTests(ServerTestCase):
+    def test_upload_and_prepare_a_bank_csv(self):
+        import base64
+
+        from hbkit.fixtures.generator import ACC_CHEQUE
+        from hbkit.imports.formats import read_import_file
+
+        from .test_import_formats import BANK_CSV
+
+        self.api("/api/import/upload", {"month": "2025-10", "name": "cheque.csv",
+                                        "content": base64.b64encode(BANK_CSV.encode()).decode()})
+        (f,) = self.api("/api/import/month?month=2025-10")["files"]
+        self.assertEqual((f["format"], f["suggested"], f["transactions"]), ("bank-csv", ACC_CHEQUE, 6))
+        preview = self.api(f"/api/import/preview?month=2025-10&file=cheque.csv&account={ACC_CHEQUE}")
+        self.assertEqual(preview["format"], "bank-csv")
+        cats = {str(r["index"]): r["suggested"] for r in preview["rows"] if r["suggested"]}
+        done = self.api("/api/import/prepare", {"month": "2025-10", "file": "cheque.csv", "account": ACC_CHEQUE,
+                                                "categories": cats})
+        prepared = read_import_file("x.csv", (self.out / done["rel"]).read_bytes())
+        self.assertEqual((prepared.format, len(prepared.txns)), ("csv", 6))
+        self.assertEqual((self.out / "imports/2025-10/originals/cheque.csv").read_bytes(), BANK_CSV.encode())

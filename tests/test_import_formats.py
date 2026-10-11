@@ -146,10 +146,75 @@ class CsvTests(unittest.TestCase):
         self.assertEqual((f.separator, len(f.txns)), (",", 1))
 
     def test_other_files_are_refused(self):
-        for raw in (b"Date,Description,Amount\n2025-09-24,SHOP,-1.00\n", b"", b"hello"):
+        for raw in (b"", b"hello", b"a;b;c\n1;2;3\n"):
             with self.assertRaises(ImportFormatError):
                 read_import_file("bank.csv", raw)
+        # A header naming date, description and amount columns is a bank's own layout.
+        self.assertEqual(read_import_file("bank.csv", b"Date,Description,Amount\n2025-09-24,SHOP,-1.00\n").format,
+                         "bank-csv")
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# A bank's own CSV export (made-up lines; the layout of the owner's bank).
+BANK_CSV = (
+    '"Value Date","Value Time","Type","Description","Beneficiary or CardHolder","Amount"\r\n'
+    '2025-10-05,10:15:00,"Card purchase","POS PURCHASE WOOLWORTHS SANDTON 4587*1234 05 OCT","",-812.40\r\n'
+    '2025-10-01,05:00:00,"Debit order","DEBIT ORDER VIRGIN ACTIVE 0012345678","",-650.00\r\n'
+    '2025-10-26,06:00:00,"Transfer","TRANSFER TO SAVINGS","To: Savings",-2000.00\r\n'
+    '2025-10-25,01:00:00,"EFT","MAGTAPE CREDIT ACME CORP SALARY REF 123456","",35000.00\r\n'
+    '2025-10-28,00:10:00,"Interest","CREDIT INTEREST ""MONTHLY""","",1.23\r\n'
+    '2025-10-30,09:00:00,"Fee","MONTHLY FEE; ADMIN","",-69.00\r\n'
+)
+
+
+class BankCsvTests(unittest.TestCase):
+    def setUp(self):
+        self.f = read_import_file("cheque.csv", BANK_CSV.encode())
+
+    def test_read(self):
+        f = self.f
+        self.assertEqual((f.format, f.date_order, len(f.txns), f.problems), ("bank-csv", "YMD", 6, []))
+        self.assertEqual(f.layout, "Value Date, Type, Description, Beneficiary or CardHolder, Amount")
+        self.assertEqual([t.paymode for t in f.txns], [6, 11, 4, 8, 0, 10])
+        t = f.txns[2]
+        self.assertEqual((t.date, t.amount, t.memo, t.payee), (date(2025, 10, 26), -2000.0, "TRANSFER TO SAVINGS", "To: Savings"))
+        self.assertEqual(f.txns[4].memo, 'CREDIT INTEREST "MONTHLY"')
+        self.assertTrue(all(t.can_take_category for t in f.txns))  # transfers are linked later, not marked here
+
+    def test_converted_to_homebank_csv(self):
+        out = with_categories(self.f, {0: "Groceries", 5: "Bank charges"})
+        lines = out.decode("utf-8").split("\r\n")
+        self.assertEqual(lines[0], "05-10-2025;6;;;POS PURCHASE WOOLWORTHS SANDTON 4587*1234 05 OCT;-812.40;Groceries;")
+        self.assertEqual(lines[4], '28-10-2025;0;;;"CREDIT INTEREST ""MONTHLY""";1.23;;')
+        self.assertEqual(lines[5], '30-10-2025;10;;;"MONTHLY FEE; ADMIN";-69.00;Bank charges;')
+        self.assertEqual(lines[6], "")
+        again = read_import_file("cheque-prepared.csv", out)
+        self.assertEqual((again.format, again.separator, len(again.txns)), ("csv", ";", 6))
+        self.assertEqual([t.category for t in again.txns], ["Groceries", "", "", "", "", "Bank charges"])
+        self.assertFalse(out.startswith(b"\xef\xbb\xbf"))  # no byte-order mark: HomeBank would misread the first date
+
+    def test_problems_and_encoding(self):
+        raw = (BANK_CSV + 'not a date,00:00:00,"Fee","X","",-1.00\r\n2025-10-31,,"","CAFÉ","",-5.00\r\n').encode("cp1252")
+        f = read_import_file("cheque.csv", raw)
+        self.assertEqual((f.encoding, f.problems, len(f.txns)), ("cp1252", [8], 7))
+        out = with_categories(f, {6: "Eating out"})
+        self.assertIn("31-10-2025;0;;;CAFÉ;-5.00;Eating out;", out.decode("utf-8"))
+
+    def test_refusals(self):
+        with self.assertRaises(ImportFormatError):
+            with_categories(self.f, {0: "[Savings]"})  # would be read as a transfer
+        with self.assertRaises(ImportFormatError):
+            with_categories(self.f, {9: "Groceries"})
+        for raw in (b'"Date","Amount"\n2025-10-01,-1.00\n', b'"Value Date","Description","Amount"\n'):
+            with self.assertRaises(ImportFormatError):
+                read_import_file("x.csv", raw)
+
+    def test_payment_modes(self):
+        from hbkit.imports.formats import bank_paymode
+
+        self.assertEqual(bank_paymode("Deposit"), 9)  # not "pos"
+        self.assertEqual(bank_paymode("Scheduled transfer"), 4)
+        self.assertEqual(bank_paymode("Something new"), 0)

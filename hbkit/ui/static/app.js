@@ -697,6 +697,8 @@ function monthTitle(month) {
   return new Date(y, m - 1, 1).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' });
 }
 
+const FILE_KINDS = { qif: 'QIF', csv: 'HomeBank CSV', 'bank-csv': 'Bank CSV' };
+
 async function fileToBase64(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let binary = '';
@@ -810,8 +812,9 @@ async function viewImports() {
     });
     return h('tr', {},
       h('td', {}, h('b', { text: f.name }),
-        f.problems.length ? h('div', { class: 'small warn-text', text: `HomeBank may not read line(s) ${f.problems.slice(0, 5).join(', ')}${f.problems.length > 5 ? '…' : ''}` }) : null),
-      h('td', { text: f.format.toUpperCase() }),
+        f.problems.length ? h('div', { class: 'small warn-text', text: `${f.format === 'bank-csv' ? 'Left out (not readable)' : 'HomeBank may not read'}: line(s) ${f.problems.slice(0, 5).join(', ')}${f.problems.length > 5 ? '…' : ''}` }) : null),
+      h('td', {}, FILE_KINDS[f.format] || f.format,
+        f.format === 'bank-csv' ? h('div', { class: 'small muted', text: 'converted when prepared' }) : null),
       h('td', { class: 'num', text: f.transactions }),
       h('td', { class: 'nowrap', text: f.first ? `${f.first} – ${f.last}` : '' }),
       h('td', {}, sel, h('div', { class: `small ${f.account ? 'muted' : 'suggested'}`, text: why }),
@@ -914,6 +917,7 @@ async function importPreview(month, file, account, onSaved) {
       result.replaceChildren(h('div', { class: 'notice' },
         h('p', { text: `Saved with ${out.categorised} categor${out.categorised === 1 ? 'y' : 'ies'}: ${out.path}` }),
         h('p', { text: `In HomeBank: File > Import…, choose this prepared file and import it into "${out.account_name}". ` +
+          (res.format === 'bank-csv' ? 'If HomeBank asks for the date format, choose day-month-year. ' : '') +
           'Keep automatic assignment switched on so your rules fill the rest.' }),
         h('button', { type: 'button', onclick: () => openFolder(out.path) }, 'Show in folder')));
       toast('Prepared file saved.');
@@ -924,7 +928,11 @@ async function importPreview(month, file, account, onSaved) {
     h('h2', { text: `${file} → ${res.account_name}` }),
     h('p', { class: 'small muted', text: 'Categories are filled in from this account\'s latest transactions with the same description (or, failing that, from all accounts, shown in orange). ' +
       'Change or clear any of them. HomeBank keeps a category from the file; only an "overwrite" rule replaces it. Transfers, splits and rows that already have a category are left as they are.' }),
-    res.problems.length ? h('div', { class: 'notice warn', text: `Lines HomeBank may not read as transactions: ${res.problems.join(', ')}.` }) : null,
+    res.format === 'bank-csv' ? h('div', { class: 'notice', text: 'HomeBank cannot import this bank\'s own CSV layout, so the prepared file is a conversion to ' +
+      'HomeBank\'s CSV layout: the same transactions, dates as day-month-year, the bank\'s transaction type as the payment mode, and the categories below.' }) : null,
+    res.problems.length ? h('div', { class: 'notice warn', text: res.format === 'bank-csv'
+      ? `Lines that could not be read and are left out of the prepared file: ${res.problems.join(', ')}.`
+      : `Lines HomeBank may not read as transactions: ${res.problems.join(', ')}.` }) : null,
     facts,
     h('datalist', { id: 'category-list' }, (app.categories || []).map(c => h('option', { value: c }))),
     h('div', { class: 'table-wrap' }, h('table', { class: 'data' },

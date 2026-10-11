@@ -134,7 +134,8 @@ account, `rule_transactions.csv`, `account_dependent.csv`), browser interface (`
 the rule review page shows each rule's transactions and downloads CSVs in the browser),
 `INSTRUCTIONS.txt` for people who download the ZIP, the import preparation tool (Imports
 page and `prepare-import`: categories per account written into a copy of a bank's QIF or
-HomeBank CSV file before import; record of file names and accounts in the data folder's
+HomeBank CSV file before import, and bank CSV layouts with a header row converted to
+HomeBank CSV; record of file names and accounts in the data folder's
 `import-accounts.json`; bank file formats in docs/import-files.md, learnt from HomeBank's
 import code plus the owner's description of their two banks' layouts — never put real
 statement lines in tests or docs), transfer linking after import (Transfers page and

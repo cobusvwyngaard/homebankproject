@@ -265,3 +265,20 @@ class PrepareCommandTests(TempDirTestCase):
         self.assertNoSentinel(out, err)
         prepared = next((self.tmp / "out").rglob("bank-prepared.qif")).read_bytes()
         self.assertIn(f"L{SENTINEL}CAT_Property A:{SENTINEL}CAT_Bond interest".encode(), prepared)
+
+
+class BankCsvPredictionTests(TempDirTestCase):
+    def test_categories_for_a_bank_csv(self):
+        from .test_import_formats import BANK_CSV
+
+        book = read_bytes(sample().data)
+        history = History(book)
+        f = read_import_file("cheque.csv", BANK_CSV.encode())
+        self.assertEqual(clear_winner(guess_accounts(history, f)).account, ACC_CHEQUE)
+        rows = preview(book, history, f, ACC_CHEQUE)
+        self.assertEqual(rows[0]["suggested"], "Groceries")
+        self.assertEqual(rows[1]["suggested"], "Sport & fitness")  # the recent habit
+        data, n = prepare(book, f, {r["index"]: r["suggested"] for r in rows if r["suggested"]})
+        again = read_import_file("cheque-prepared.csv", data)
+        self.assertEqual(again.format, "csv")
+        self.assertEqual(sum(1 for t in again.txns if t.category), n)

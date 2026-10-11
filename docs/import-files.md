@@ -57,9 +57,38 @@ Exactly 8 columns, no header needed:
 Bank 2 (cheque, savings, card): semicolon, no header, dates `DD-MM-YYYY`, transfers
 between own accounts with payment mode 5 and a payee such as "To: …" or "From: …".
 
+### A bank's own CSV layout (converted)
+
+HomeBank cannot import these; the toolkit converts them to HomeBank CSV when preparing.
+Recognised when the first non-empty row names the columns (case and spacing ignored):
+
+| Meaning | Column names recognised |
+|---|---|
+| date (required) | Value Date, Transaction Date, Date |
+| description (required) | Description |
+| amount (required, signed) | Amount |
+| transaction type | Type, Transaction Type |
+| payee | Beneficiary or CardHolder, Beneficiary |
+
+Other columns (e.g. Value Time) are not used. The separator (comma, semicolon or tab)
+is taken from the header row; fields may be quoted. Rows whose date or amount cannot be
+read are left out and reported by line number.
+
+Bank 2 (cheque, savings): comma-separated, a header row, dates `YYYY-MM-DD`, a time
+column, a type column, text in double quotes, signed amounts with a decimal point.
+
+The conversion writes, per transaction: date `DD-MM-YYYY`; the payment mode from the
+type (first match: debit order 11, transfer or re-direct 4, EFT or payment 8, card or
+POS 6, ATM or cash 3, fee or charge 10, deposit 9, otherwise 0); no info; the payee; the
+description as memo (spacing collapsed to single spaces); the amount with two decimals;
+the category; no tags. Separator `;`, UTF-8 without a byte-order mark (a mark would spoil
+the first date), Windows line endings; fields containing `;` or `"` are quoted. Transfers
+are not marked as internal transfers: they are linked after the import (Transfers page).
+
 ### Not read (yet)
 
-OFX/QFX, and banks' own CSV layouts. HomeBank itself only imports CSV in the layout above.
+OFX/QFX, and bank CSV layouts with other column names (for example separate debit and
+credit columns).
 
 ## What HomeBank does on import
 
