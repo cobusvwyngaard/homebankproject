@@ -55,8 +55,35 @@ Practical consequence: never put the literal text `data/` in a shell command
 - The writer never overwrites its input; it refuses if the output path is the input.
 - Adding an analysis later should mean one new module in `hbkit/analyses/` plus its tests.
 
+## Commands for development
+
+```
+python3.13 -m venv .venv                       # once
+.venv/bin/python -m unittest discover -s tests -t .   # all tests (Windows: .venv\Scripts\python)
+.venv/bin/python -m hbkit --help
+```
+
+Try commands on a synthetic file only, e.g. `python -m hbkit generate-sample --output <tmp>/s.xhb`
+then `python -m hbkit structure --file <tmp>/s.xhb`.
+
+## Layout
+
+```
+hbkit/cli.py              command-line interface (python -m hbkit)
+hbkit/privacy.py          Summary (numbers only), Terminal (hides file text), output folders
+hbkit/errors.py           exceptions with terminal-safe messages
+hbkit/xhb/format.py       constants from HomeBank's source
+hbkit/xhb/scanner.py      byte-exact, GMarkup-like scanner
+hbkit/xhb/reader.py       scanner output -> typed objects (model.py)
+hbkit/xhb/serialise.py    HomeBank 5.10.3 save functions, line for line
+hbkit/xhb/structure.py    structure report (no values)
+hbkit/fixtures/generator.py  synthetic .xhb files for tests and trying things out
+tests/                    unittest; fixtures/homebank_example = HomeBank's own example.xhb (GPL)
+docs/xhb-format.md        what was learnt about the format, with source references
+```
+
 ## Status
 
-Privacy set-up done. Architecture plan presented to the owner; awaiting approval
-before any toolkit code is written. Project layout and commands will be recorded
-here once built.
+Plan approved by the owner (Windows user; descriptions are in the memo field;
+merchant-level rule merging switched on). Stage 1 (reader, generator, structure
+report) done. Next: writer, SQLite export, analysis framework, rule mining, README.

@@ -1,0 +1,837 @@
+<?xml version="1.0"?>
+<homebank v="1.3" d="050100">
+<properties title="HomeBank Sample File" curr="1" car_category="2" auto_smode="2" auto_weekday="1" auto_nbmonths="1" auto_nbdays="10" earnbyh="9.7200000000000006"/>
+<cur key="3" flags="0" iso="USD" name="US Dollar" symb="$" syprf="1" dchar="," gchar=" " frac="2" rate="1.0805830000000001" mdate="0"/>
+<cur key="4" flags="2" iso="BTC" name="Bitcoin" symb="BTC" syprf="0" dchar="." gchar="(null)" frac="2" rate="4.1999999999999998e-05" mdate="0"/>
+<cur key="2" flags="0" iso="JPY" name="Yen" symb="¥" syprf="1" dchar="." gchar="," frac="0" rate="158.141717" mdate="0"/>
+<cur key="1" flags="0" iso="EUR" name="Euro" symb="€" syprf="0" dchar="," gchar=" " frac="2" rate="0" mdate="0"/>
+<grp key="1" name="Online"/>
+<grp key="2" name="Classic bank"/>
+<grp key="3" name="Loan"/>
+<account key="1" pos="1" type="1" curr="1" name="Cheque account" number="01548726554" bankname="Amiga United Bank" initial="50" minimum="-200" maximum="0" cheque1="8760951" website="https://www.mybank.com" grp="2" rdate="738958"/>
+<account key="2" pos="2" type="7" curr="1" name="Saving account" number="01524872652" bankname="Amiga United Bank" initial="1000" minimum="0" maximum="500" grp="2" rdate="738556"/>
+<account key="3" pos="3" type="6" curr="2" name="Japan account" initial="500" minimum="0" maximum="100" grp="2" rdate="738556"/>
+<account key="4" pos="4" curr="3" name="Paypal Account" bankname="Paypal Inc." initial="500" minimum="0" maximum="0" website="https://www.paypal.com" grp="1"/>
+<account key="5" pos="5" curr="4" name="Bitcoin Account" initial="0.41999999999999998" minimum="0" maximum="0" grp="1"/>
+<account key="6" flags="114" pos="6" curr="1" name="Closed Account" initial="2000" minimum="0" maximum="0" grp="2"/>
+<account key="7" pos="6" type="1" curr="1" name="bank account" initial="0" minimum="0" maximum="0" grp="3"/>
+<account key="8" pos="7" curr="1" name="loan (house)" initial="0" minimum="0" maximum="0" grp="3" rdate="738906"/>
+<pay key="3" name="Peugeot 106"/>
+<pay key="5" name="Allianz"/>
+<pay key="8" name="GRDF"/>
+<pay key="9" name="Free Telecom"/>
+<pay key="10" name="Netflix" category="10"/>
+<pay key="11" name="Prixtel"/>
+<pay key="13" name="World Company" category="125" paymode="4"/>
+<pay key="14" name="Corner Pharma"/>
+<pay key="16" name="Laforêt"/>
+<pay key="17" name="Total Access"/>
+<pay key="19" name="Dr Joyeux" category="48"/>
+<pay key="20" name="EDF"/>
+<pay key="21" name="Me"/>
+<pay key="22" name="Leclerc drive" category="1" paymode="6"/>
+<pay key="23" name="Deezer"/>
+<cat key="1" flags="8" name="Alimony" b0="-100"/>
+<cat key="129" parent="1" flags="1" name="Food"/>
+<cat key="130" parent="1" flags="1" name="House"/>
+<cat key="2" name="Automobile"/>
+<cat key="4" parent="2" flags="9" name="Gasoline" b0="-80"/>
+<cat key="3" parent="2" flags="9" name="Car Payment" b0="-186"/>
+<cat key="9" name="Bills"/>
+<cat key="11" parent="9" flags="1" name="Cell Phone"/>
+<cat key="19" parent="9" flags="9" name="Natural Gas/Oil" b0="-100"/>
+<cat key="13" parent="9" flags="1" name="Electricity"/>
+<cat key="10" parent="9" flags="9" name="Cable/Satellite Television" b0="-10"/>
+<cat key="21" parent="9" flags="9" name="On-line/Internet Service" b0="-38.990000000000002"/>
+<cat key="23" parent="9" flags="9" name="Rent" b0="-550"/>
+<cat key="45" flags="32" name="Health-care"/>
+<cat key="50" parent="45" flags="1" name="Prescriptions"/>
+<cat key="131" parent="45" flags="11" name="Reimbursement" b0="5"/>
+<cat key="48" parent="45" flags="1" name="Hospital"/>
+<cat key="65" name="Insurance"/>
+<cat key="66" parent="65" flags="1" name="Automobile"/>
+<cat key="120" flags="2" name="Wage &amp; Salary"/>
+<cat key="125" parent="120" flags="11" name="Net Pay" b0="1218.5999999999999"/>
+<cat key="128" parent="120" flags="3" name="Bonus"/>
+<cat key="127" name="Savings"/>
+<tag key="1" name="entertainment"/>
+<tag key="2" name="energy"/>
+<tag key="3" name="peugot-106-s16"/>
+<tag key="4" name="loan"/>
+<tag key="5" name="open-world"/>
+<asg key="1" flags="6" pos="1" name="freebox" payee="9" category="21" amount="0"/>
+<asg key="2" flags="6" pos="2" name="home" payee="16" category="23" amount="0"/>
+<fav key="10" amount="-13.49" account="1" paymode="6" flags="1540" payee="10" category="10" wording="binge watching" tags="entertainment" nextdate="738565" every="1" unit="2" limit="1"/>
+<fav key="8" amount="-100" account="1" paymode="8" flags="1540" payee="8" category="19" wording="boiler and cooking" tags="energy" nextdate="738579" every="1" unit="2" limit="1"/>
+<fav key="16" amount="-19.989999999999998" account="1" flags="1540" payee="23" category="21" wording="deezer family" tags="entertainment" nextdate="738565" every="1" unit="2" limit="1"/>
+<fav key="17" amount="-90" account="1" paymode="6" st="2" flags="1284" payee="22" wording="food" nextdate="738553" every="1" unit="2" limit="1" scat="129||130" samt="-70||-20" smem="||"/>
+<fav key="13" amount="-20" account="1" dst_account="2" flags="1548" payee="21" category="127" wording="for hard time" nextdate="738578" every="1" unit="2" limit="1"/>
+<fav key="4" amount="-94" account="1" paymode="6" flags="1540" payee="17" category="4" wording="fuel" tags="peugot-106-s16" nextdate="738572" every="1" unit="2" limit="1"/>
+<fav key="2" amount="-532.00999999999999" account="1" paymode="8" flags="1540" payee="16" category="23" wording="home sweet home" nextdate="738566" every="1" unit="2" limit="1" weekend="2"/>
+<fav key="5" amount="-84" account="1" paymode="4" flags="1540" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16" nextdate="738561" every="1" unit="2" limit="1"/>
+<fav key="20" amount="-33.200000000000003" account="8" flags="1540" wording="loan insurance" nextdate="738927" every="1" unit="2" limit="1"/>
+<fav key="21" amount="-1053.45" account="7" dst_account="8" flags="1548" wording="loan refund" nextdate="738926" every="1" unit="2" limit="1"/>
+<fav key="15" amount="5" account="3" paymode="4" flags="1542" payee="13" category="128" wording="my bonus" nextdate="738578" every="1" unit="2" limit="1"/>
+<fav key="3" amount="-136" account="1" paymode="8" flags="1540" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan" nextdate="738557" every="1" unit="2" limit="1" weekend="2"/>
+<fav key="9" amount="-38.990000000000002" account="1" flags="1540" payee="9" category="21" wording="my freebox" tags="open-world" nextdate="738561" every="1" unit="2" limit="1"/>
+<fav key="7" amount="-20" account="1" paymode="6" flags="1540" payee="14" category="50" wording="my pills" nextdate="738552" every="1" unit="2" limit="1"/>
+<fav key="1" amount="1218.5999999999999" account="1" paymode="4" flags="1542" payee="13" category="125" wording="my smic" nextdate="738561" every="1" unit="2" limit="1" weekend="2"/>
+<fav key="12" amount="-76" account="1" paymode="7" flags="1540" payee="20" category="13" wording="plugged stuff" tags="energy" nextdate="738553" every="1" unit="2" limit="1"/>
+<fav key="11" amount="-5.4900000000000002" account="1" paymode="6" flags="1540" payee="11" category="11" wording="the little 30Go" tags="open-world" nextdate="738553" every="1" unit="2" limit="1"/>
+<fav key="6" amount="-25" account="1" paymode="6" flags="1540" payee="19" category="48" wording="up and running" nextdate="738567" every="3" unit="2" limit="1"/>
+<ope date="735608" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="1"/>
+<ope date="735639" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="2"/>
+<ope date="735667" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="3"/>
+<ope date="735698" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="4"/>
+<ope date="735728" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="5"/>
+<ope date="735759" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="6"/>
+<ope date="735789" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="7"/>
+<ope date="735820" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="8"/>
+<ope date="735851" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="9"/>
+<ope date="735881" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="10"/>
+<ope date="735912" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="11"/>
+<ope date="735942" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="12"/>
+<ope date="735973" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="13"/>
+<ope date="736004" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="14"/>
+<ope date="736033" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="15"/>
+<ope date="736064" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="16"/>
+<ope date="736094" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="17"/>
+<ope date="736125" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="18"/>
+<ope date="736155" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="19"/>
+<ope date="736186" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="20"/>
+<ope date="736217" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="21"/>
+<ope date="736247" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="22"/>
+<ope date="736278" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="23"/>
+<ope date="736308" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="24"/>
+<ope date="736339" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="25"/>
+<ope date="736370" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="26"/>
+<ope date="736398" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="27"/>
+<ope date="736429" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="28"/>
+<ope date="736459" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="29"/>
+<ope date="736490" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="30"/>
+<ope date="736520" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="31"/>
+<ope date="736551" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="32"/>
+<ope date="736582" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="33"/>
+<ope date="736612" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="34"/>
+<ope date="736643" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="35"/>
+<ope date="736673" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="36"/>
+<ope date="736704" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="37"/>
+<ope date="736735" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="38"/>
+<ope date="736763" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="39"/>
+<ope date="736794" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="40"/>
+<ope date="736824" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="41"/>
+<ope date="736855" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="42"/>
+<ope date="736885" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="43"/>
+<ope date="736916" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="44"/>
+<ope date="736947" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="45"/>
+<ope date="736977" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="46"/>
+<ope date="737008" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="47"/>
+<ope date="737038" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="48"/>
+<ope date="737069" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="49"/>
+<ope date="737100" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="50"/>
+<ope date="737128" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="51"/>
+<ope date="737159" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="52"/>
+<ope date="737189" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="53"/>
+<ope date="737220" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="54"/>
+<ope date="737250" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="55"/>
+<ope date="737281" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="56"/>
+<ope date="737312" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="57"/>
+<ope date="737342" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="58"/>
+<ope date="737373" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="59"/>
+<ope date="737403" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="60"/>
+<ope date="737434" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="61"/>
+<ope date="737465" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="62"/>
+<ope date="737494" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="63"/>
+<ope date="737525" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="64"/>
+<ope date="737555" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="65"/>
+<ope date="737586" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="66"/>
+<ope date="737616" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="67"/>
+<ope date="737647" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="68"/>
+<ope date="737678" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="69"/>
+<ope date="737708" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="70"/>
+<ope date="737739" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="71"/>
+<ope date="737769" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="72"/>
+<ope date="737800" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="73"/>
+<ope date="737831" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="74"/>
+<ope date="737859" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="75"/>
+<ope date="737890" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="76"/>
+<ope date="737920" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="77"/>
+<ope date="737951" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="78"/>
+<ope date="737981" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="79"/>
+<ope date="738012" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="80"/>
+<ope date="738043" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="81"/>
+<ope date="738073" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="82"/>
+<ope date="738104" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="83"/>
+<ope date="738134" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="84"/>
+<ope date="738165" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="85"/>
+<ope date="738196" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="86"/>
+<ope date="738224" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="87"/>
+<ope date="738255" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="88"/>
+<ope date="738285" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="89"/>
+<ope date="738316" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="90"/>
+<ope date="738346" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="91"/>
+<ope date="738377" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="92"/>
+<ope date="738408" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="93"/>
+<ope date="738438" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="94"/>
+<ope date="738469" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="95"/>
+<ope date="738499" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="96"/>
+<ope date="738530" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="97"/>
+<ope date="738561" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="98"/>
+<ope date="738589" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="99"/>
+<ope date="738620" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="100"/>
+<ope date="738650" amount="-1053.45" account="7" dst_account="8" flags="136" wording="loan refund" kxfer="101"/>
+<ope date="738681" amount="-1053.45" account="7" dst_account="8" flags="8" wording="loan refund" kxfer="102"/>
+<ope date="738711" amount="-1053.45" account="7" dst_account="8" flags="8" wording="loan refund" kxfer="103"/>
+<ope date="738742" amount="-1053.45" account="7" dst_account="8" flags="8" wording="loan refund" kxfer="104"/>
+<ope date="738773" amount="-1053.45" account="7" dst_account="8" flags="8" wording="loan refund" kxfer="105"/>
+<ope date="738803" amount="-1053.45" account="7" dst_account="8" flags="8" wording="loan refund" kxfer="106"/>
+<ope date="738834" amount="-1053.45" account="7" dst_account="8" flags="8" wording="loan refund" kxfer="107"/>
+<ope date="738864" amount="-1053.45" account="7" dst_account="8" flags="8" wording="loan refund" kxfer="108"/>
+<ope date="738895" amount="-1053.45" account="7" dst_account="8" flags="8" wording="loan refund" kxfer="109"/>
+<ope date="735577" amount="-166000" account="8" st="2"/>
+<ope date="735608" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="1"/>
+<ope date="735608" amount="-454.94" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735609" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="735639" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="2"/>
+<ope date="735639" amount="-453.38999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735640" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="735667" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="3"/>
+<ope date="735667" amount="-451.82999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735668" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="735698" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="4"/>
+<ope date="735698" amount="-450.26999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735699" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="735728" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="5"/>
+<ope date="735728" amount="-448.69999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735729" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="735759" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="6"/>
+<ope date="735759" amount="-447.13" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735760" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="735789" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="7"/>
+<ope date="735789" amount="-445.55000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735790" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="735820" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="8"/>
+<ope date="735820" amount="-443.97000000000003" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735821" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="735851" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="9"/>
+<ope date="735851" amount="-442.38999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735852" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="735881" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="10"/>
+<ope date="735881" amount="-440.80000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735882" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="735912" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="11"/>
+<ope date="735912" amount="-439.19999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735913" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="735942" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="12"/>
+<ope date="735942" amount="-437.61000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735943" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="735973" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="13"/>
+<ope date="735973" amount="-436" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="735974" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736004" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="14"/>
+<ope date="736004" amount="-434.39999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736005" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736033" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="15"/>
+<ope date="736033" amount="-432.79000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736034" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736064" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="16"/>
+<ope date="736064" amount="-431.17000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736065" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736094" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="17"/>
+<ope date="736094" amount="-429.55000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736095" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736125" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="18"/>
+<ope date="736125" amount="-427.93000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736126" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736155" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="19"/>
+<ope date="736155" amount="-426.30000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736156" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736186" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="20"/>
+<ope date="736186" amount="-424.66000000000003" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736187" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736217" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="21"/>
+<ope date="736217" amount="-423.02999999999997" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736218" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736247" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="22"/>
+<ope date="736247" amount="-421.38" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736248" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736278" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="23"/>
+<ope date="736278" amount="-419.74000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736279" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736308" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="24"/>
+<ope date="736308" amount="-418.08999999999997" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736309" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736339" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="25"/>
+<ope date="736339" amount="-416.43000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736340" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736370" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="26"/>
+<ope date="736370" amount="-414.76999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736371" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736398" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="27"/>
+<ope date="736398" amount="-413.10000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736399" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736429" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="28"/>
+<ope date="736429" amount="-411.43000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736430" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736459" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="29"/>
+<ope date="736459" amount="-409.75999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736460" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736490" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="30"/>
+<ope date="736490" amount="-408.07999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736491" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736520" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="31"/>
+<ope date="736520" amount="-406.39999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736521" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736551" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="32"/>
+<ope date="736551" amount="-404.70999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736552" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736582" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="33"/>
+<ope date="736582" amount="-403.01999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736583" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736612" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="34"/>
+<ope date="736612" amount="-401.31999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736613" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736643" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="35"/>
+<ope date="736643" amount="-399.62" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736644" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736673" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="36"/>
+<ope date="736673" amount="-397.91000000000003" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736674" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736704" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="37"/>
+<ope date="736704" amount="-396.19999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736705" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736735" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="38"/>
+<ope date="736735" amount="-394.48000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736736" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736763" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="39"/>
+<ope date="736763" amount="-392.75999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736764" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736794" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="40"/>
+<ope date="736794" amount="-391.04000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736795" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736824" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="41"/>
+<ope date="736824" amount="-389.31" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736825" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736855" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="42"/>
+<ope date="736855" amount="-387.56999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736856" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736885" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="43"/>
+<ope date="736885" amount="-385.82999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736886" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736916" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="44"/>
+<ope date="736916" amount="-384.08999999999997" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736917" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736947" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="45"/>
+<ope date="736947" amount="-382.33999999999997" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736948" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="736977" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="46"/>
+<ope date="736977" amount="-380.57999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="736978" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737008" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="47"/>
+<ope date="737008" amount="-378.81999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737009" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737038" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="48"/>
+<ope date="737038" amount="-377.06" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737039" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737069" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="49"/>
+<ope date="737069" amount="-375.29000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737070" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737100" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="50"/>
+<ope date="737100" amount="-373.51999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737101" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737128" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="51"/>
+<ope date="737128" amount="-371.74000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737129" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737159" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="52"/>
+<ope date="737159" amount="-369.95999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737160" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737189" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="53"/>
+<ope date="737189" amount="-368.17000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737190" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737220" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="54"/>
+<ope date="737220" amount="-366.37" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737221" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737250" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="55"/>
+<ope date="737250" amount="-364.57999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737251" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737281" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="56"/>
+<ope date="737281" amount="-362.76999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737282" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737312" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="57"/>
+<ope date="737312" amount="-360.97000000000003" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737313" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737342" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="58"/>
+<ope date="737342" amount="-359.14999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737343" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737373" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="59"/>
+<ope date="737373" amount="-357.32999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737374" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737403" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="60"/>
+<ope date="737403" amount="-355.50999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737404" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737434" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="61"/>
+<ope date="737434" amount="-353.68000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737435" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737465" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="62"/>
+<ope date="737465" amount="-351.85000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737466" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737494" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="63"/>
+<ope date="737494" amount="-350.00999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737495" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737525" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="64"/>
+<ope date="737525" amount="-348.17000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737526" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737555" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="65"/>
+<ope date="737555" amount="-346.31999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737556" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737586" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="66"/>
+<ope date="737586" amount="-344.47000000000003" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737587" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737616" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="67"/>
+<ope date="737616" amount="-342.61000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737617" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737647" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="68"/>
+<ope date="737647" amount="-340.75" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737648" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737678" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="69"/>
+<ope date="737678" amount="-338.88" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737679" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737708" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="70"/>
+<ope date="737708" amount="-337" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737709" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737739" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="71"/>
+<ope date="737739" amount="-335.12" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737740" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737769" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="72"/>
+<ope date="737769" amount="-333.24000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737770" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737800" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="73"/>
+<ope date="737800" amount="-331.35000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737801" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737831" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="74"/>
+<ope date="737831" amount="-329.45999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737832" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737859" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="75"/>
+<ope date="737859" amount="-327.56" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737860" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737890" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="76"/>
+<ope date="737890" amount="-325.64999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737891" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737920" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="77"/>
+<ope date="737920" amount="-323.74000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737921" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737951" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="78"/>
+<ope date="737951" amount="-321.82999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737952" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="737981" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="79"/>
+<ope date="737981" amount="-319.91000000000003" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="737982" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738012" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="80"/>
+<ope date="738012" amount="-317.98000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738013" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738043" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="81"/>
+<ope date="738043" amount="-316.05000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738044" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738073" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="82"/>
+<ope date="738073" amount="-314.11000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738074" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738104" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="83"/>
+<ope date="738104" amount="-312.17000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738105" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738134" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="84"/>
+<ope date="738134" amount="-310.22000000000003" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738135" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738165" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="85"/>
+<ope date="738165" amount="-308.26999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738166" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738196" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="86"/>
+<ope date="738196" amount="-306.31" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738197" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738224" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="87"/>
+<ope date="738224" amount="-304.35000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738225" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738255" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="88"/>
+<ope date="738255" amount="-302.38" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738256" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738285" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="89"/>
+<ope date="738285" amount="-300.41000000000003" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738286" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738316" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="90"/>
+<ope date="738316" amount="-298.43000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738317" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738346" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="91"/>
+<ope date="738346" amount="-296.44" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738347" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738377" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="92"/>
+<ope date="738377" amount="-294.44999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738378" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738408" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="93"/>
+<ope date="738408" amount="-292.44999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738409" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738438" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="94"/>
+<ope date="738438" amount="-290.44999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738439" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738469" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="95"/>
+<ope date="738469" amount="-288.44999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738470" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738499" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="96"/>
+<ope date="738499" amount="-286.43000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738500" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738530" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="97"/>
+<ope date="738530" amount="-284.42000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738531" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738561" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="98"/>
+<ope date="738561" amount="-282.38999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738562" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738589" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="99"/>
+<ope date="738589" amount="-280.36000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738590" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738620" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="100"/>
+<ope date="738620" amount="-278.32999999999998" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738621" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738650" amount="1053.45" account="8" dst_account="7" st="2" flags="138" wording="loan refund" kxfer="101"/>
+<ope date="738650" amount="-276.29000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738651" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738681" amount="1053.45" account="8" dst_account="7" flags="10" wording="loan refund" kxfer="102"/>
+<ope date="738681" amount="-274.24000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738682" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738711" amount="1053.45" account="8" dst_account="7" flags="10" wording="loan refund" kxfer="103"/>
+<ope date="738711" amount="-272.19" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738712" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738742" amount="1053.45" account="8" dst_account="7" flags="10" wording="loan refund" kxfer="104"/>
+<ope date="738742" amount="-270.13" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738743" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738773" amount="1053.45" account="8" dst_account="7" flags="10" wording="loan refund" kxfer="105"/>
+<ope date="738773" amount="-268.06999999999999" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738774" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738803" amount="1053.45" account="8" dst_account="7" flags="10" wording="loan refund" kxfer="106"/>
+<ope date="738803" amount="-266" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738804" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738834" amount="1053.45" account="8" dst_account="7" flags="10" wording="loan refund" kxfer="107"/>
+<ope date="738834" amount="-263.93000000000001" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738835" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738864" amount="1053.45" account="8" dst_account="7" flags="10" wording="loan refund" kxfer="108"/>
+<ope date="738864" amount="-261.85000000000002" account="8" grpflg="2" st="2" wording="loan fee"/>
+<ope date="738865" amount="-33.200000000000003" account="8" st="2" wording="loan insurance"/>
+<ope date="738895" amount="1053.45" account="8" dst_account="7" flags="10" wording="loan refund" kxfer="109"/>
+<ope date="738895" amount="-259.75999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="738896" amount="-33.200000000000003" account="8" wording="loan insurance"/>
+<ope date="738926" amount="-257.67000000000002" account="8" grpflg="2" wording="loan fee"/>
+<ope date="738955" amount="-255.56999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="738986" amount="-253.47" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739016" amount="-251.36000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739047" amount="-249.25" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739077" amount="-247.13" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739108" amount="-245" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739139" amount="-242.87" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739169" amount="-240.72999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739200" amount="-238.59" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739230" amount="-236.44" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739261" amount="-234.28" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739292" amount="-232.12" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739320" amount="-229.94999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739351" amount="-227.78" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739381" amount="-225.59999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739412" amount="-223.41999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739442" amount="-221.22" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739473" amount="-219.03" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739504" amount="-216.81999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739534" amount="-214.61000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739565" amount="-212.40000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739595" amount="-210.18000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739626" amount="-207.94999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739657" amount="-205.72" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739685" amount="-203.47999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739716" amount="-201.22999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739746" amount="-198.97999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739777" amount="-196.72" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739807" amount="-194.44999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739838" amount="-192.18000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739869" amount="-189.91" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739899" amount="-187.62" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739930" amount="-185.33000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739960" amount="-183.03999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="739991" amount="-180.72999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740022" amount="-178.43000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740050" amount="-176.11000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740081" amount="-173.78999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740111" amount="-171.46000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740142" amount="-169.13" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740172" amount="-166.78999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740203" amount="-164.44" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740234" amount="-162.09" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740264" amount="-159.72999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740295" amount="-157.36000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740325" amount="-154.99000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740356" amount="-152.61000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740387" amount="-150.22" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740416" amount="-147.83000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740447" amount="-145.43000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740477" amount="-143.02000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740508" amount="-140.61000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740538" amount="-138.19" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740569" amount="-135.77000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740600" amount="-133.33000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740630" amount="-130.90000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740661" amount="-128.44999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740691" amount="-126" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740722" amount="-123.54000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740753" amount="-121.06999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740781" amount="-118.59999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740812" amount="-116.12" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740842" amount="-113.63" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740873" amount="-111.14" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740903" amount="-108.64" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740934" amount="-106.13" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740965" amount="-103.62" account="8" grpflg="2" wording="loan fee"/>
+<ope date="740995" amount="-101.09999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741026" amount="-98.569999999999993" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741056" amount="-96.040000000000006" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741087" amount="-93.489999999999995" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741118" amount="-90.950000000000003" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741146" amount="-88.390000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741177" amount="-85.829999999999998" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741207" amount="-83.260000000000005" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741238" amount="-80.680000000000007" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741268" amount="-78.099999999999994" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741299" amount="-75.510000000000005" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741330" amount="-72.909999999999997" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741360" amount="-70.299999999999997" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741391" amount="-67.689999999999998" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741421" amount="-65.069999999999993" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741452" amount="-62.439999999999998" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741483" amount="-59.810000000000002" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741511" amount="-57.170000000000002" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741542" amount="-54.520000000000003" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741572" amount="-51.869999999999997" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741603" amount="-49.200000000000003" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741633" amount="-46.530000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741664" amount="-43.850000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741695" amount="-41.170000000000002" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741725" amount="-38.479999999999997" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741756" amount="-35.780000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741786" amount="-33.07" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741817" amount="-30.350000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741848" amount="-27.629999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741877" amount="-24.899999999999999" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741908" amount="-22.170000000000002" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741938" amount="-19.420000000000002" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741969" amount="-16.670000000000002" account="8" grpflg="2" wording="loan fee"/>
+<ope date="741999" amount="-13.91" account="8" grpflg="2" wording="loan fee"/>
+<ope date="742030" amount="-11.140000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="742061" amount="-8.3699999999999992" account="8" grpflg="2" wording="loan fee"/>
+<ope date="742091" amount="-5.5800000000000001" account="8" grpflg="2" wording="loan fee"/>
+<ope date="742122" amount="-2.79" account="8" grpflg="2" wording="loan fee"/>
+<ope date="742152" amount="-454.94" account="8" grpflg="2" wording="loan fee"/>
+<ope date="738182" amount="20" account="2" dst_account="1" grpflg="6" st="2" flags="10" payee="21" category="127" wording="for hard time" kxfer="1"/>
+<ope date="738213" amount="20" account="2" dst_account="1" grpflg="6" st="2" flags="10" payee="21" category="127" wording="for hard time" kxfer="2"/>
+<ope date="738241" amount="20" account="2" dst_account="1" grpflg="6" st="2" flags="10" payee="21" category="127" wording="for hard time" kxfer="3"/>
+<ope date="738272" amount="20" account="2" dst_account="1" grpflg="6" st="2" flags="10" payee="21" category="127" wording="for hard time" kxfer="4"/>
+<ope date="738302" amount="20" account="2" dst_account="1" grpflg="6" st="2" flags="10" payee="21" category="127" wording="for hard time" kxfer="5"/>
+<ope date="738333" amount="20" account="2" dst_account="1" grpflg="6" st="2" flags="10" payee="21" category="127" wording="for hard time" kxfer="6"/>
+<ope date="738363" amount="20" account="2" dst_account="1" grpflg="6" st="2" flags="10" payee="21" category="127" wording="for hard time" kxfer="7"/>
+<ope date="738394" amount="20" account="2" dst_account="1" grpflg="6" st="2" flags="10" payee="21" category="127" wording="for hard time" kxfer="8"/>
+<ope date="738425" amount="20" account="2" dst_account="1" grpflg="6" st="2" flags="10" payee="21" category="127" wording="for hard time" kxfer="9"/>
+<ope date="738455" amount="20" account="2" dst_account="1" grpflg="6" st="2" flags="10" payee="21" category="127" wording="for hard time" kxfer="10"/>
+<ope date="738486" amount="20" account="2" dst_account="1" grpflg="6" st="2" flags="10" payee="21" category="127" wording="for hard time" kxfer="11"/>
+<ope date="738516" amount="20" account="2" dst_account="1" grpflg="6" st="2" flags="10" payee="21" category="127" wording="for hard time" kxfer="12"/>
+<ope date="738547" amount="20" account="2" dst_account="1" grpflg="6" st="1" flags="10" payee="21" category="127" wording="for hard time" kxfer="13"/>
+<ope date="738156" amount="-20" account="1" paymode="6" st="2" payee="14" category="50" wording="my pills"/>
+<ope date="738157" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738157" amount="-76" account="1" paymode="7" st="2" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738157" amount="-5.4900000000000002" account="1" paymode="6" st="2" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738161" amount="-136" account="1" paymode="8" st="2" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738165" amount="-84" account="1" paymode="4" st="2" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738165" amount="-38.990000000000002" account="1" st="2" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738165" amount="1218.5999999999999" account="1" paymode="4" st="2" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738171" amount="-25" account="1" paymode="6" st="2" payee="19" category="48" wording="up and running"/>
+<ope date="738172" amount="-532.00999999999999" account="1" paymode="8" st="2" payee="16" category="23" wording="home sweet home"/>
+<ope date="738176" amount="-94" account="1" paymode="6" st="2" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738182" amount="-20" account="1" dst_account="2" grpflg="6" st="2" flags="8" payee="21" category="127" wording="for hard time" kxfer="1"/>
+<ope date="738183" amount="-100" account="1" paymode="8" st="2" payee="8" category="19" wording="boiler and cooking" tags="energy"/>
+<ope date="738187" amount="-20" account="1" paymode="6" st="2" payee="14" category="50" wording="my pills"/>
+<ope date="738188" amount="-76" account="1" paymode="7" st="2" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738188" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738188" amount="-5.4900000000000002" account="1" paymode="6" st="2" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738193" amount="-136" account="1" paymode="8" st="2" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738196" amount="-84" account="1" paymode="4" st="2" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738196" amount="-38.990000000000002" account="1" st="2" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738196" amount="1218.5999999999999" account="1" paymode="4" st="2" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738200" amount="-13.49" account="1" paymode="6" st="2" payee="10" category="10" wording="binge watching" tags="entertainment"/>
+<ope date="738201" amount="-532.00999999999999" account="1" paymode="8" st="2" payee="16" category="23" wording="home sweet home"/>
+<ope date="738207" amount="-94" account="1" paymode="6" st="2" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738213" amount="-20" account="1" dst_account="2" grpflg="6" st="2" flags="8" payee="21" category="127" wording="for hard time" kxfer="2"/>
+<ope date="738214" amount="-100" account="1" paymode="8" st="2" payee="8" category="19" wording="boiler and cooking" tags="energy"/>
+<ope date="738215" amount="-20" account="1" paymode="6" st="2" payee="14" category="50" wording="my pills"/>
+<ope date="738216" amount="-76" account="1" paymode="7" st="2" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738216" amount="-5.4900000000000002" account="1" paymode="6" st="2" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738216" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738221" amount="-136" account="1" paymode="8" st="2" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738224" amount="-84" account="1" paymode="4" st="2" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738224" amount="-38.990000000000002" account="1" st="2" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738224" amount="1218.5999999999999" account="1" paymode="4" st="2" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738228" amount="-13.49" account="1" paymode="6" st="2" payee="10" category="10" wording="binge watching" tags="entertainment"/>
+<ope date="738228" amount="-19.989999999999998" account="1" payee="23" category="21" wording="deezer family" tags="entertainment"/>
+<ope date="738229" amount="-532.00999999999999" account="1" paymode="8" st="2" payee="16" category="23" wording="home sweet home"/>
+<ope date="738235" amount="-94" account="1" paymode="6" st="2" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738241" amount="-20" account="1" dst_account="2" grpflg="6" st="2" flags="8" payee="21" category="127" wording="for hard time" kxfer="3"/>
+<ope date="738242" amount="-100" account="1" paymode="8" st="2" payee="8" category="19" wording="boiler and cooking" tags="energy"/>
+<ope date="738246" amount="-20" account="1" paymode="6" st="2" payee="14" category="50" wording="my pills"/>
+<ope date="738247" amount="-76" account="1" paymode="7" st="2" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738247" amount="-5.4900000000000002" account="1" paymode="6" st="2" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738247" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738251" amount="-136" account="1" paymode="8" st="2" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738255" amount="-84" account="1" paymode="4" st="2" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738255" amount="-38.990000000000002" account="1" st="2" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738256" amount="1218.5999999999999" account="1" paymode="4" st="2" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738259" amount="-13.49" account="1" paymode="6" st="2" payee="10" category="10" wording="binge watching" tags="entertainment"/>
+<ope date="738259" amount="-19.989999999999998" account="1" payee="23" category="21" wording="deezer family" tags="entertainment"/>
+<ope date="738260" amount="-532.00999999999999" account="1" paymode="8" st="2" payee="16" category="23" wording="home sweet home"/>
+<ope date="738261" amount="-25" account="1" paymode="6" st="2" payee="19" category="48" wording="up and running"/>
+<ope date="738266" amount="-94" account="1" paymode="6" st="2" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738272" amount="-20" account="1" dst_account="2" grpflg="6" st="2" flags="8" payee="21" category="127" wording="for hard time" kxfer="4"/>
+<ope date="738273" amount="-100" account="1" paymode="8" st="2" payee="8" category="19" wording="boiler and cooking" tags="energy"/>
+<ope date="738276" amount="-20" account="1" paymode="6" st="2" payee="14" category="50" wording="my pills"/>
+<ope date="738277" amount="-76" account="1" paymode="7" st="2" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738277" amount="-5.4900000000000002" account="1" paymode="6" st="2" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738277" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738281" amount="-136" account="1" paymode="8" st="2" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738285" amount="-84" account="1" paymode="4" st="2" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738285" amount="-38.990000000000002" account="1" st="2" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738285" amount="1218.5999999999999" account="1" paymode="4" st="2" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738289" amount="-13.49" account="1" paymode="6" st="2" payee="10" category="10" wording="binge watching" tags="entertainment"/>
+<ope date="738289" amount="-19.989999999999998" account="1" payee="23" category="21" wording="deezer family" tags="entertainment"/>
+<ope date="738291" amount="-532.00999999999999" account="1" paymode="8" st="2" payee="16" category="23" wording="home sweet home"/>
+<ope date="738296" amount="-94" account="1" paymode="6" st="2" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738302" amount="-20" account="1" dst_account="2" grpflg="6" st="2" flags="8" payee="21" category="127" wording="for hard time" kxfer="5"/>
+<ope date="738303" amount="-100" account="1" paymode="8" st="2" payee="8" category="19" wording="boiler and cooking" tags="energy"/>
+<ope date="738307" amount="-20" account="1" paymode="6" st="2" payee="14" category="50" wording="my pills"/>
+<ope date="738308" amount="-76" account="1" paymode="7" st="2" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738308" amount="-5.4900000000000002" account="1" paymode="6" st="2" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738308" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738312" amount="-136" account="1" paymode="8" st="2" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738316" amount="-84" account="1" paymode="4" st="2" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738316" amount="-38.990000000000002" account="1" st="2" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738316" amount="1218.5999999999999" account="1" paymode="4" st="2" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738320" amount="-13.49" account="1" paymode="6" st="2" payee="10" category="10" wording="binge watching" tags="entertainment"/>
+<ope date="738320" amount="-19.989999999999998" account="1" payee="23" category="21" wording="deezer family" tags="entertainment"/>
+<ope date="738321" amount="-532.00999999999999" account="1" paymode="8" st="2" payee="16" category="23" wording="home sweet home"/>
+<ope date="738327" amount="-94" account="1" paymode="6" st="2" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738333" amount="-20" account="1" dst_account="2" grpflg="6" st="2" flags="8" payee="21" category="127" wording="for hard time" kxfer="6"/>
+<ope date="738334" amount="-100" account="1" paymode="8" st="2" payee="8" category="19" wording="boiler and cooking" tags="energy"/>
+<ope date="738337" amount="-20" account="1" paymode="6" st="2" payee="14" category="50" wording="my pills"/>
+<ope date="738338" amount="-76" account="1" paymode="7" st="2" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738338" amount="-5.4900000000000002" account="1" paymode="6" st="2" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738338" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738342" amount="-136" account="1" paymode="8" st="2" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738346" amount="-84" account="1" paymode="4" st="2" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738346" amount="-38.990000000000002" account="1" st="2" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738347" amount="1218.5999999999999" account="1" paymode="4" st="2" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738350" amount="-13.49" account="1" paymode="6" st="2" payee="10" category="10" wording="binge watching" tags="entertainment"/>
+<ope date="738350" amount="-19.989999999999998" account="1" payee="23" category="21" wording="deezer family" tags="entertainment"/>
+<ope date="738351" amount="-532.00999999999999" account="1" paymode="8" st="2" payee="16" category="23" wording="home sweet home"/>
+<ope date="738352" amount="-25" account="1" paymode="6" st="2" payee="19" category="48" wording="up and running"/>
+<ope date="738357" amount="-94" account="1" paymode="6" st="2" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738363" amount="-20" account="1" dst_account="2" grpflg="6" st="2" flags="8" payee="21" category="127" wording="for hard time" kxfer="7"/>
+<ope date="738364" amount="-100" account="1" paymode="8" st="2" payee="8" category="19" wording="boiler and cooking" tags="energy"/>
+<ope date="738368" amount="-20" account="1" paymode="6" st="2" payee="14" category="50" wording="my pills"/>
+<ope date="738369" amount="-76" account="1" paymode="7" st="2" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738369" amount="-5.4900000000000002" account="1" paymode="6" st="2" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738369" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738375" amount="-136" account="1" paymode="8" st="2" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738377" amount="-84" account="1" paymode="4" st="2" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738377" amount="-38.990000000000002" account="1" st="2" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738377" amount="1218.5999999999999" account="1" paymode="4" st="2" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738381" amount="-13.49" account="1" paymode="6" st="2" payee="10" category="10" wording="binge watching" tags="entertainment"/>
+<ope date="738381" amount="-19.989999999999998" account="1" payee="23" category="21" wording="deezer family" tags="entertainment"/>
+<ope date="738382" amount="-532.00999999999999" account="1" paymode="8" st="2" payee="16" category="23" wording="home sweet home"/>
+<ope date="738388" amount="-94" account="1" paymode="6" st="2" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738394" amount="-20" account="1" dst_account="2" grpflg="6" st="2" flags="8" payee="21" category="127" wording="for hard time" kxfer="8"/>
+<ope date="738395" amount="-100" account="1" paymode="8" st="2" payee="8" category="19" wording="boiler and cooking" tags="energy"/>
+<ope date="738399" amount="-20" account="1" paymode="6" st="2" payee="14" category="50" wording="my pills"/>
+<ope date="738400" amount="-76" account="1" paymode="7" st="2" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738400" amount="-5.4900000000000002" account="1" paymode="6" st="2" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738400" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738404" amount="-136" account="1" paymode="8" st="2" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738408" amount="-84" account="1" paymode="4" st="2" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738408" amount="-38.990000000000002" account="1" st="2" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738410" amount="1218.5999999999999" account="1" paymode="4" st="2" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738412" amount="-13.49" account="1" paymode="6" st="2" payee="10" category="10" wording="binge watching" tags="entertainment"/>
+<ope date="738412" amount="-19.989999999999998" account="1" payee="23" category="21" wording="deezer family" tags="entertainment"/>
+<ope date="738413" amount="-532.00999999999999" account="1" paymode="8" st="2" payee="16" category="23" wording="home sweet home"/>
+<ope date="738419" amount="-94" account="1" paymode="6" st="2" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738425" amount="-20" account="1" dst_account="2" grpflg="6" st="2" flags="8" payee="21" category="127" wording="for hard time" kxfer="9"/>
+<ope date="738426" amount="-100" account="1" paymode="8" st="2" payee="8" category="19" wording="boiler and cooking" tags="energy"/>
+<ope date="738429" amount="-20" account="1" paymode="6" st="2" payee="14" category="50" wording="my pills"/>
+<ope date="738430" amount="-76" account="1" paymode="7" st="2" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738430" amount="-5.4900000000000002" account="1" paymode="6" st="2" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738430" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738434" amount="-136" account="1" paymode="8" st="2" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738438" amount="-84" account="1" paymode="4" st="2" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738438" amount="-38.990000000000002" account="1" st="2" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738438" amount="1218.5999999999999" account="1" paymode="4" st="2" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738442" amount="-13.49" account="1" paymode="6" st="2" payee="10" category="10" wording="binge watching" tags="entertainment"/>
+<ope date="738442" amount="-19.989999999999998" account="1" payee="23" category="21" wording="deezer family" tags="entertainment"/>
+<ope date="738444" amount="-25" account="1" paymode="6" st="2" payee="19" category="48" wording="up and running"/>
+<ope date="738445" amount="-532.00999999999999" account="1" paymode="8" st="2" payee="16" category="23" wording="home sweet home"/>
+<ope date="738449" amount="-94" account="1" paymode="6" st="2" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738455" amount="-20" account="1" dst_account="2" grpflg="6" st="2" flags="8" payee="21" category="127" wording="for hard time" kxfer="10"/>
+<ope date="738456" amount="-100" account="1" paymode="8" st="2" payee="8" category="19" wording="boiler and cooking" tags="energy"/>
+<ope date="738460" amount="-20" account="1" paymode="6" st="2" payee="14" category="50" wording="my pills"/>
+<ope date="738461" amount="-76" account="1" paymode="7" st="2" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738461" amount="-5.4900000000000002" account="1" paymode="6" st="2" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738461" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738466" amount="-136" account="1" paymode="8" st="2" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738469" amount="-84" account="1" paymode="4" st="2" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738469" amount="-38.990000000000002" account="1" st="2" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738469" amount="1218.5999999999999" account="1" paymode="4" st="2" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738473" amount="-13.49" account="1" paymode="6" st="2" payee="10" category="10" wording="binge watching" tags="entertainment"/>
+<ope date="738473" amount="-19.989999999999998" account="1" payee="23" category="21" wording="deezer family" tags="entertainment"/>
+<ope date="738474" amount="-532.00999999999999" account="1" paymode="8" st="2" payee="16" category="23" wording="home sweet home"/>
+<ope date="738480" amount="-94" account="1" paymode="6" st="2" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738486" amount="-20" account="1" dst_account="2" grpflg="6" st="2" flags="8" payee="21" category="127" wording="for hard time" kxfer="11"/>
+<ope date="738487" amount="-100" account="1" paymode="8" st="2" payee="8" category="19" wording="boiler and cooking" tags="energy"/>
+<ope date="738490" amount="-20" account="1" paymode="6" st="2" payee="14" category="50" wording="my pills"/>
+<ope date="738491" amount="-76" account="1" paymode="7" st="2" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738491" amount="-5.4900000000000002" account="1" paymode="6" st="2" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738491" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738495" amount="-136" account="1" paymode="8" st="2" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738499" amount="-84" account="1" paymode="4" st="2" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738499" amount="-38.990000000000002" account="1" st="2" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738501" amount="1218.5999999999999" account="1" paymode="4" st="2" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738503" amount="-13.49" account="1" paymode="6" st="2" payee="10" category="10" wording="binge watching" tags="entertainment"/>
+<ope date="738503" amount="-19.989999999999998" account="1" payee="23" category="21" wording="deezer family" tags="entertainment"/>
+<ope date="738504" amount="-532.00999999999999" account="1" paymode="8" st="2" payee="16" category="23" wording="home sweet home"/>
+<ope date="738510" amount="-94" account="1" paymode="6" st="2" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738516" amount="-20" account="1" dst_account="2" grpflg="6" st="2" flags="8" payee="21" category="127" wording="for hard time" kxfer="12"/>
+<ope date="738517" amount="-100" account="1" paymode="8" st="2" payee="8" category="19" wording="boiler and cooking" tags="energy"/>
+<ope date="738521" amount="-20" account="1" paymode="6" st="1" payee="14" category="50" wording="my pills"/>
+<ope date="738522" amount="-76" account="1" paymode="7" st="1" payee="20" category="13" wording="plugged stuff" tags="energy"/>
+<ope date="738522" amount="-5.4900000000000002" account="1" paymode="6" st="1" payee="11" category="11" wording="the little 30Go" tags="open-world"/>
+<ope date="738522" amount="-90" account="1" paymode="6" st="2" flags="256" payee="22" wording="food" scat="129||130" samt="-70||-20" smem="||"/>
+<ope date="738526" amount="-136" account="1" paymode="8" st="1" payee="3" category="3" wording="my car buy" tags="peugot-106-s16 loan"/>
+<ope date="738530" amount="-84" account="1" paymode="4" st="1" payee="5" category="66" wording="legit car insurrance" tags="peugot-106-s16 loan open-world"/>
+<ope date="738530" amount="-38.990000000000002" account="1" st="1" payee="9" category="21" wording="my freebox" tags="open-world"/>
+<ope date="738530" amount="1218.5999999999999" account="1" paymode="4" st="1" flags="2" payee="13" category="125" wording="my smic"/>
+<ope date="738534" amount="-85.439999999999998" account="1" paymode="1" st="1" payee="17" category="4" wording="Refuel (d=5000 v=62.41)" info="12.01" tags="energy peugot-106-s16"/>
+<ope date="738534" amount="-13.49" account="1" paymode="6" st="1" payee="10" category="10" wording="binge watching" tags="entertainment"/>
+<ope date="738534" amount="-19.989999999999998" account="1" payee="23" category="21" wording="deezer family" tags="entertainment"/>
+<ope date="738535" amount="-41.07" account="1" paymode="1" st="1" payee="17" category="4" wording="Refuel (d=5453 v~30.00)" info="14.01" tags="energy peugot-106-s16"/>
+<ope date="738536" amount="-532.00999999999999" account="1" paymode="8" st="1" payee="16" category="23" wording="home sweet home"/>
+<ope date="738536" amount="-25" account="1" paymode="6" st="1" payee="19" category="48" wording="up and running"/>
+<ope date="738541" amount="-94" account="1" paymode="6" st="1" payee="17" category="4" wording="fuel" tags="energy peugot-106-s16"/>
+<ope date="738547" amount="-20" account="1" dst_account="2" grpflg="6" st="1" flags="8" payee="21" category="127" wording="for hard time" kxfer="13"/>
+<ope date="738182" amount="5" account="3" paymode="4" grpflg="4" st="2" flags="2" payee="13" category="128" wording="my bonus"/>
+<ope date="738213" amount="5" account="3" paymode="4" grpflg="4" st="2" flags="2" payee="13" category="128" wording="my bonus"/>
+<ope date="738241" amount="5" account="3" paymode="4" grpflg="4" st="2" flags="2" payee="13" category="128" wording="my bonus"/>
+<ope date="738272" amount="5" account="3" paymode="4" grpflg="4" st="2" flags="2" payee="13" category="128" wording="my bonus"/>
+<ope date="738302" amount="5" account="3" paymode="4" grpflg="4" st="2" flags="2" payee="13" category="128" wording="my bonus"/>
+<ope date="738333" amount="5" account="3" paymode="4" grpflg="4" st="2" flags="2" payee="13" category="128" wording="my bonus"/>
+<ope date="738363" amount="5" account="3" paymode="4" grpflg="4" st="2" flags="2" payee="13" category="128" wording="my bonus"/>
+<ope date="738394" amount="5" account="3" paymode="4" grpflg="4" st="2" flags="2" payee="13" category="128" wording="my bonus"/>
+<ope date="738425" amount="5" account="3" paymode="4" grpflg="4" st="2" flags="2" payee="13" category="128" wording="my bonus"/>
+<ope date="738455" amount="5" account="3" paymode="4" grpflg="4" st="2" flags="2" payee="13" category="128" wording="my bonus"/>
+<ope date="738486" amount="5" account="3" paymode="4" grpflg="4" st="2" flags="2" payee="13" category="128" wording="my bonus"/>
+<ope date="738516" amount="5" account="3" paymode="4" grpflg="4" st="2" flags="2" payee="13" category="128" wording="my bonus"/>
+<ope date="738547" amount="5" account="3" paymode="4" grpflg="4" st="1" flags="2" payee="13" category="128" wording="my bonus"/>
+</homebank>
