@@ -11,7 +11,7 @@ from pathlib import Path
 
 from . import __version__
 from .errors import HbkitError
-from .privacy import OUT_DIR, Summary, Terminal, default_input, display_path, write_error_log
+from .privacy import DATA_DIR, OUT_DIR, Summary, Terminal, default_input, display_path, write_error_log
 
 
 SAMPLE_SETTINGS = """# Settings for the synthetic sample file (made by generate-sample --reporting).
@@ -98,6 +98,75 @@ def cmd_export_sqlite(args: argparse.Namespace) -> int:
         s.count("Reader warnings (see the structure command)", sum(book.warnings.values()))
     s.output("Database", out)
     s.note("The schema is described in docs/sqlite-schema.md.")
+    Terminal(book.sensitive_strings()).summary(s)
+    return 0
+
+
+def cmd_prepare_import(args: argparse.Namespace) -> int:
+    from .imports import session as S
+    from .imports.formats import read_import_file
+    from .imports.memory import MEMORY_NAME, ImportMemory, check_month
+    from .imports.predict import History, clear_winner, guess_accounts
+    from .xhb.reader import read_file
+
+    source = Path(args.input)
+    if not source.is_file():
+        raise HbkitError("the bank file was not found")
+    raw = source.read_bytes()
+    f = read_import_file(source.name, raw)
+    book = read_file(_input_path(args))
+    history = History(book)
+    last = f.last_date
+    month = check_month(args.month) if args.month else (f"{last.year:04d}-{last.month:02d}" if last else None)
+    if month is None:
+        raise HbkitError("the file has no readable dates; give the month with --month")
+    memory = ImportMemory(Path(args.data) / MEMORY_NAME)
+    if args.account:
+        wanted = args.account.strip()
+        matches = [a for a in book.accounts.values()
+                   if (wanted.isdigit() and a.key == int(wanted)) or a.name.casefold() == wanted.casefold()]
+        if len(matches) != 1:
+            raise HbkitError("that account was not found in the HomeBank file (give its name as in HomeBank)")
+        account, how = matches[0].key, "given with --account"
+    else:
+        remembered = memory.predict(source.name, month)
+        best = clear_winner(guess_accounts(history, f))
+        if remembered and remembered[0] in book.accounts:
+            account, how = remembered[0], "remembered for this file name"
+        elif best:
+            account, how = best.account, "recognised from its contents"
+        else:
+            raise HbkitError("could not tell which account this file belongs to; give it with --account")
+    rows = S.preview(book, history, f, account)
+    choices = {r["index"]: r["suggested"] for r in rows if r["suggested"]}
+    data, n = S.prepare(book, f, choices)
+    original = S.add_file(Path(args.out), month, source.name, raw)
+    target = S.save_prepared(original, data)
+    memory.link(month, original.name, account, book.account_name(account) or "", sha256=S.sha256(raw),
+                transactions=len(f.txns), categorised=n,
+                prepared=target.relative_to(Path(args.out)).as_posix())
+    memory.save()
+
+    s = Summary("Prepare an import file")
+    s.count("Transactions in the file", len(f.txns))
+    s.note(f"Account: {how}.")
+    s.heading("Categories written into the prepared copy")
+    s.count("From this account's history", sum(1 for r in rows if r["suggested"] and r["source"] == "this account"))
+    s.count("From all accounts", sum(1 for r in rows if r["suggested"] and r["source"] == "all accounts"))
+    open_rows = [r for r in rows if not r["skip"] and not r["suggested"]]
+    s.count("Left to your HomeBank rules", sum(1 for r in open_rows if r["homebank"]))
+    s.count("Without a category", sum(1 for r in open_rows if not r["homebank"]))
+    s.count("Transfers, splits or already categorised (left as they are)", sum(1 for r in rows if r["skip"]))
+    s.heading("Checks")
+    s.count("Possibly already in HomeBank", sum(1 for r in rows if r["duplicate"]))
+    s.count("Replaced on import by an overwrite rule", sum(
+        1 for r in rows if r["suggested"] and r["overwritten_by"] and r["overwrite_category"] != r["suggested"]))
+    if f.problems:
+        s.count("Lines HomeBank may not read as transactions", len(f.problems))
+    s.heading("Output")
+    s.output("Prepared copy", target)
+    s.note("Import the prepared copy in HomeBank (File > Import) into the same account. Details per", terminal_only=True)
+    s.note("transaction are on the Imports page of the browser interface (python -m hbkit ui).", terminal_only=True)
     Terminal(book.sensitive_strings()).summary(s)
     return 0
 
@@ -312,6 +381,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--settings", metavar="PATH",
                    help="report settings, to add the r_* report views (default: data/settings.toml if it exists)")
     p.set_defaults(handler=cmd_export_sqlite)
+
+    p = sub.add_parser("prepare-import",
+                       help="add categories to a bank file (QIF or HomeBank CSV) before you import it in HomeBank")
+    _add_file_option(p)
+    _add_out_option(p)
+    p.add_argument("--input", required=True, metavar="PATH", help="the file from your bank")
+    p.add_argument("--account", metavar="NAME",
+                   help="its HomeBank account (default: remembered for this file name, or recognised from the contents)")
+    p.add_argument("--month", metavar="YYYY-MM", help="the month it is for (default: that of its latest transaction)")
+    p.add_argument("--data", metavar="FOLDER", default=str(DATA_DIR), help=argparse.SUPPRESS)
+    p.set_defaults(handler=cmd_prepare_import)
 
     p = sub.add_parser("generate-sample", help="write a synthetic HomeBank file to try the toolkit on")
     _add_out_option(p)

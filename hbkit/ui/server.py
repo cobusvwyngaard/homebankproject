@@ -23,6 +23,8 @@ on their computer. The terminal stays aggregate-only.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import csv
 import hashlib
 import hmac
@@ -75,6 +77,7 @@ class UiState:
         self._book = None
         self._book_stamp = None
         self._matches = None  # (key, RuleMatches, sha256 of the file) for the rule review page
+        self._history = None  # (stamp, imports History) for the imports page
         if self.input_path is None:
             files = self.data_files()
             if len(files) == 1:
@@ -111,6 +114,20 @@ class UiState:
             self._matches = (key, RuleMatches.for_book(book, field_name, include_transfers),
                              hashlib.sha256(book.raw).hexdigest())
         return self._matches[1], self._matches[2]
+
+    def import_history(self):
+        """The selected file's history for import predictions, kept until the file changes."""
+        from ..imports.predict import History
+
+        book = self.book()
+        if self._history is None or self._history[0] != self._book_stamp:
+            self._history = (self._book_stamp, History(book))
+        return book, self._history[1]
+
+    def import_memory(self):
+        from ..imports.memory import MEMORY_NAME, ImportMemory
+
+        return ImportMemory(self.data_dir / MEMORY_NAME)
 
     def inside_out(self, rel: str) -> Path:
         """A path under the output folder; refuses anything that escapes it."""
@@ -438,6 +455,163 @@ def api_report_run(state: UiState, q: dict, body: Any) -> dict:
     return {"summary": summary.to_dict(), "output": str(path)}
 
 
+# --- imports ---------------------------------------------------------------------------------------
+
+
+def _file_dict(info) -> dict:
+    d = dict(vars(info))
+    d["first"] = info.first.isoformat() if info.first else ""
+    d["last"] = info.last.isoformat() if info.last else ""
+    return d
+
+
+def _account(book, value: Any) -> int:
+    try:
+        key = int(value)
+    except (TypeError, ValueError):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "choose an account") from None
+    if key not in book.accounts:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "that account does not exist in the HomeBank file")
+    return key
+
+
+def api_import_month(state: UiState, q: dict, body: Any) -> dict:
+    """Everything the imports page shows for one month."""
+    from ..imports import session as S
+    from ..imports.memory import check_month
+
+    month = check_month(q.get("month", ""))
+    with state.lock:
+        book, history = state.import_history()
+        memory = state.import_memory()
+        accounts = S.month_accounts(book, history, memory, month)
+        files, problems = [], []
+        for path in S.month_files(state.out_root, month):
+            try:
+                files.append(_file_dict(S.file_info(book, history, memory, month, path)))
+            except HbkitError as e:
+                problems.append({"name": path.name, "error": str(e)})
+    linked: dict[int, list] = {}
+    for f in files:
+        if f["account"]:
+            linked.setdefault(f["account"], []).append({"name": f["name"], "prepared": bool(f["prepared"])})
+    for a in accounts:
+        a["files"] = linked.get(a["key"], [])
+    record = sorted(memory.links, key=lambda x: (x.get("month", ""), x.get("linked", "")), reverse=True)
+    return {"month": month, "accounts": accounts, "files": files, "unreadable": problems, "record": record,
+            "folder": str(S.month_dir(state.out_root, month).relative_to(state.out_root).as_posix()),
+            "expected_chosen": memory.expected_accounts is not None}
+
+
+def api_import_expected(state: UiState, q: dict, body: Any) -> dict:
+    keys = body.get("accounts")
+    if not isinstance(keys, list):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "accounts must be a list")
+    with state.lock:
+        book = state.book()
+        memory = state.import_memory()
+        memory.expected_accounts = sorted({_account(book, k) for k in keys})
+        memory.save()
+    return {"expected": memory.expected_accounts}
+
+
+def api_import_upload(state: UiState, q: dict, body: Any) -> dict:
+    from ..imports import session as S
+    from ..imports.memory import check_month
+
+    month = check_month(str(body.get("month", "")))
+    try:
+        raw = base64.b64decode(str(body.get("content", "")), validate=True)
+    except (binascii.Error, ValueError):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "the file could not be received") from None
+    with state.lock:
+        path = S.add_file(state.out_root, month, str(body.get("name", "")), raw)
+    return {"name": path.name}
+
+
+def api_import_link(state: UiState, q: dict, body: Any) -> dict:
+    from ..imports import session as S
+    from ..imports.memory import check_month
+
+    month = check_month(str(body.get("month", "")))
+    with state.lock:
+        book = state.book()
+        path = S.original(state.out_root, month, str(body.get("file", "")))
+        memory = state.import_memory()
+        if body.get("account") in (None, ""):
+            memory.unlink(month, path.name)
+        else:
+            key = _account(book, body.get("account"))
+            memory.link(month, path.name, key, book.account_name(key) or "", sha256=S.sha256(path.read_bytes()))
+        memory.save()
+    return {"linked": body.get("account")}
+
+
+def api_import_remove(state: UiState, q: dict, body: Any) -> dict:
+    from ..imports import session as S
+    from ..imports.memory import check_month
+
+    month = check_month(str(body.get("month", "")))
+    with state.lock:
+        path = S.original(state.out_root, month, str(body.get("file", "")))
+        prepared = path.parent.parent / "prepared" / S.prepared_name(path.name)
+        path.unlink()
+        prepared.unlink(missing_ok=True)
+        memory = state.import_memory()
+        memory.unlink(month, path.name)
+        memory.save()
+    return {"removed": path.name}
+
+
+def _import_file(state: UiState, month: str, name: str):
+    from ..imports import session as S
+    from ..imports.formats import read_import_file
+
+    path = S.original(state.out_root, month, name)
+    return path, read_import_file(path.name, path.read_bytes())
+
+
+def api_import_preview(state: UiState, q: dict, body: Any) -> dict:
+    from ..imports import session as S
+    from ..imports.memory import check_month
+
+    month = check_month(q.get("month", ""))
+    with state.lock:
+        book, history = state.import_history()
+        key = _account(book, q.get("account"))
+        path, f = _import_file(state, month, q.get("file", ""))
+        rows = S.preview(book, history, f, key)
+    return {"file": path.name, "format": f.format, "account": key, "account_name": book.account_name(key),
+            "rows": rows, "problems": f.problems, "date_order": f.date_order}
+
+
+def api_import_prepare(state: UiState, q: dict, body: Any) -> dict:
+    from ..imports import session as S
+    from ..imports.memory import check_month
+
+    month = check_month(str(body.get("month", "")))
+    choices = body.get("categories")
+    if not isinstance(choices, dict):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "categories must be given per transaction")
+    with state.lock:
+        book = state.book()
+        key = _account(book, body.get("account"))
+        path, f = _import_file(state, month, str(body.get("file", "")))
+        try:
+            parsed = {int(i): str(v) for i, v in choices.items()}
+        except ValueError:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "invalid transaction number") from None
+        data, n = S.prepare(book, f, parsed)
+        target = S.save_prepared(path, data)
+        memory = state.import_memory()
+        memory.link(month, path.name, key, book.account_name(key) or "", sha256=S.sha256(path.read_bytes()),
+                    transactions=len(f.txns), categorised=n,
+                    prepared=target.relative_to(state.out_root).as_posix())
+        memory.save()
+    return {"path": str(target), "rel": target.relative_to(state.out_root).as_posix(), "categorised": n,
+            "transactions": len(f.txns), "account_name": book.account_name(key)}
+
+
 def api_open(state: UiState, q: dict, body: Any) -> dict:
     """Show a results folder in Windows Explorer, or open a report page in the browser."""
     target = state.inside_out(str(body.get("path", "")))
@@ -470,6 +644,13 @@ ROUTES = {
     ("POST", "/api/open"): api_open,
     ("GET", "/api/reports"): api_reports,
     ("POST", "/api/report/run"): api_report_run,
+    ("GET", "/api/import/month"): api_import_month,
+    ("POST", "/api/import/expected"): api_import_expected,
+    ("POST", "/api/import/upload"): api_import_upload,
+    ("POST", "/api/import/link"): api_import_link,
+    ("POST", "/api/import/remove"): api_import_remove,
+    ("GET", "/api/import/preview"): api_import_preview,
+    ("POST", "/api/import/prepare"): api_import_prepare,
 }
 
 

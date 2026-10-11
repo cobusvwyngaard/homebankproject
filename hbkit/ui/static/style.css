@@ -102,7 +102,7 @@ button.primary { background: var(--accent); color: var(--accent-text); border-co
 button.primary:hover { filter: brightness(1.08); }
 button:disabled { opacity: .55; cursor: progress; }
 button.link { border: 0; background: none; color: var(--accent); padding: 0; text-decoration: underline; }
-input[type=text], input[type=number], input[type=search], select {
+input[type=text], input[type=number], input[type=search], input[type=month], select {
   font: inherit; color: var(--text); background: var(--panel);
   border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
 }
@@ -160,6 +160,19 @@ table.data input[type=text] { width: 100%; min-width: 160px; padding: 4px 6px; }
 .pill.bad { background: var(--bad-soft); border-color: var(--bad); }
 .pill.warn { background: var(--warn-soft); border-color: var(--warn); }
 .pill.account { background: var(--warn-soft); border-color: var(--warn); }
+.pill.ok { background: var(--accent-soft); border-color: var(--accent); }
+.warn-text { color: var(--warn); }
+.bad-text { color: var(--bad); }
+.suggested { color: var(--accent); }
+.nowrap { white-space: nowrap; }
+
+/* imports */
+.dropzone {
+  border: 2px dashed var(--line); border-radius: 10px; padding: 18px; margin: 8px 0 12px;
+  display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; color: var(--muted);
+}
+.dropzone.over { border-color: var(--accent); background: var(--accent-soft); }
+table.data select { max-width: 280px; }
 table.data tr.warn-row { background: var(--warn-soft) !important; }
 button.compact { padding: 3px 10px; font-size: 13px; }
 

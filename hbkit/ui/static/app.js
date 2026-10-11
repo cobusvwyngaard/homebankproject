@@ -675,6 +675,265 @@ async function viewReports() {
   main(parts);
 }
 
+// --- imports -----------------------------------------------------------------------------------------------
+
+function previousMonth() {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function shiftMonth(month, step) {
+  let [y, m] = month.split('-').map(Number);
+  m += step;
+  while (m < 1) { m += 12; y--; }
+  while (m > 12) { m -= 12; y++; }
+  return `${y}-${String(m).padStart(2, '0')}`;
+}
+
+function monthTitle(month) {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' });
+}
+
+async function fileToBase64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+async function viewImports() {
+  if (!app.status || !app.status.selected) { await needFile(); return; }
+  app.importMonth = app.importMonth || previousMonth();
+  const month = app.importMonth;
+  const [info, categories] = await Promise.all([
+    api(`/api/import/month?month=${encodeURIComponent(month)}`),
+    app.categories ? Promise.resolve(app.categories) : api('/api/categories'),
+  ]);
+  app.categories = categories;
+  const title = monthTitle(month);
+  const accounts = info.accounts;
+  const toMonth = m => { app.importMonth = m; viewImports(); };
+
+  // month
+  const monthInput = h('input', { type: 'month', value: month, 'aria-label': 'Month',
+    onchange: e => { if (/^\d{4}-\d{2}$/.test(e.target.value)) toMonth(e.target.value); } });
+  const monthRow = h('div', { class: 'row' }, h('span', { class: 'muted', text: 'Month' }),
+    h('button', { type: 'button', title: 'Previous month', onclick: () => toMonth(shiftMonth(month, -1)) }, '‹'),
+    monthInput,
+    h('button', { type: 'button', title: 'Next month', onclick: () => toMonth(shiftMonth(month, 1)) }, '›'),
+    info.files.length ? h('button', { type: 'button', onclick: () => openFolder(info.folder) }, 'Show folder') : null);
+
+  // accounts that matter this month
+  const accTable = h('table', { class: 'data' });
+  const accCount = h('span', { class: 'muted small' });
+  let showAll = !!app.importShowAll;
+  function drawAccounts() {
+    const list = accounts.filter(a => showAll || a.expected || a.files.length);
+    const expected = accounts.filter(a => a.expected);
+    accCount.textContent = `${expected.filter(a => a.files.length).length} of ${expected.length} accounts you import monthly have a file for ${title}.`;
+    accTable.replaceChildren(
+      h('thead', {}, h('tr', {}, ['Monthly', 'Account', 'Type', 'Latest in HomeBank', `In HomeBank for ${title}`, 'File'].map(t => h('th', { text: t })))),
+      h('tbody', {}, list.map(a => h('tr', {},
+        h('td', {}, h('input', { type: 'checkbox', checked: a.expected, title: 'I import this account every month (remembered)',
+          onchange: e => saveExpected(a, e.target.checked) })),
+        h('td', { text: a.name + (a.closed ? ' (closed)' : '') }),
+        h('td', { class: 'muted', text: a.type }),
+        h('td', { text: a.last_date }),
+        h('td', { class: 'num', text: a.in_month || '' }),
+        h('td', {}, a.files.length
+          ? a.files.map(f => h('div', {}, h('span', { class: `pill ${f.prepared ? 'ok' : ''}`, text: f.prepared ? 'prepared' : 'linked' }), ' ', f.name))
+          : (a.expected ? h('span', { class: 'muted small', text: 'no file yet' }) : ''))))));
+  }
+  async function saveExpected(a, value) {
+    a.expected = value;
+    try { await api('/api/import/expected', { accounts: accounts.filter(x => x.expected).map(x => x.key) }); }
+    catch (err) { toast(err.message, true); }
+    drawAccounts();
+  }
+  drawAccounts();
+  const accountsCard = h('div', { class: 'card' },
+    h('h2', { text: `Accounts for ${title}` }),
+    h('p', { class: 'small muted', text: info.expected_chosen
+      ? 'Ticked accounts are the ones you import every month.'
+      : 'Ticked for now: open accounts with transactions in this month or the three before. Change the ticks to choose the accounts you import every month; they are remembered.' }),
+    h('div', { class: 'toolbar' }, accCount, h('span', { class: 'spacer' }),
+      h('label', { class: 'small' }, h('input', { type: 'checkbox', checked: showAll,
+        onchange: e => { showAll = app.importShowAll = e.target.checked; drawAccounts(); } }), ' Show all accounts')),
+    h('div', { class: 'table-wrap' }, accTable));
+
+  // files
+  const fileInput = h('input', { type: 'file', multiple: true, accept: '.qif,.csv,.txt', hidden: true,
+    onchange: e => upload([...e.target.files]) });
+  const addBtn = h('button', { type: 'button', class: 'primary', onclick: () => fileInput.click() }, 'Add files…');
+  const drop = h('div', { class: 'dropzone' }, h('span', { text: 'Drop QIF or CSV files from your bank here, or ' }), addBtn, fileInput);
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); upload([...e.dataTransfer.files]); });
+  async function upload(files) {
+    let added = 0;
+    for (const file of files) {
+      try {
+        await api('/api/import/upload', { month, name: file.name, content: await fileToBase64(file) });
+        added++;
+      } catch (err) { toast(`${file.name}: ${err.message}`, true); }
+    }
+    if (added) { toast(`${added} file(s) added for ${title}.`); viewImports(); }
+  }
+  const accountOptions = selected => {
+    const expected = accounts.filter(a => a.expected), others = accounts.filter(a => !a.expected);
+    const opt = a => h('option', { value: a.key, selected: a.key === selected }, a.name + (a.closed ? ' (closed)' : ''));
+    return [h('option', { value: '' }, '— choose the account —'),
+      expected.length ? h('optgroup', { label: 'Imported monthly' }, expected.map(opt)) : null,
+      others.length ? h('optgroup', { label: expected.length ? 'Other accounts' : 'Accounts' }, others.map(opt)) : null];
+  };
+  const previewArea = h('div');
+  const fileRows = info.files.map(f => {
+    const sel = h('select', { onchange: async e => {
+      try {
+        await api('/api/import/link', { month, file: f.name, account: e.target.value || null });
+        viewImports();
+      } catch (err) { toast(err.message, true); }
+    } }, accountOptions(f.account || f.suggested));
+    const why = f.account ? 'linked by you' : (f.suggested ? `suggested: ${f.reason}` : f.reason);
+    const prepare = h('button', { type: 'button', class: f.prepared ? null : 'primary' }, f.prepared ? 'Prepare again…' : 'Prepare…');
+    prepare.addEventListener('click', () => {
+      if (!sel.value) { toast('Choose the account first.', true); return; }
+      busy(prepare, 'Loading', () => showPreview(f.name, Number(sel.value)));
+    });
+    const remove = h('button', { type: 'button', title: 'Remove this file from the month (your own copy is not touched)' }, 'Remove');
+    remove.addEventListener('click', () => {
+      if (!confirm(`Remove ${f.name} from ${title}? The toolkit's copy and its prepared file are deleted; your own download is not touched.`)) return;
+      busy(remove, 'Removing', async () => { await api('/api/import/remove', { month, file: f.name }); viewImports(); });
+    });
+    return h('tr', {},
+      h('td', {}, h('b', { text: f.name }),
+        f.problems.length ? h('div', { class: 'small warn-text', text: `HomeBank may not read line(s) ${f.problems.slice(0, 5).join(', ')}${f.problems.length > 5 ? '…' : ''}` }) : null),
+      h('td', { text: f.format.toUpperCase() }),
+      h('td', { class: 'num', text: f.transactions }),
+      h('td', { class: 'nowrap', text: f.first ? `${f.first} – ${f.last}` : '' }),
+      h('td', {}, sel, h('div', { class: `small ${f.account ? 'muted' : 'suggested'}`, text: why }),
+        f.warning ? h('div', { class: 'small bad-text', text: `Check: ${f.warning}` }) : null),
+      h('td', {}, f.prepared ? h('div', { class: 'row' }, h('span', { class: 'pill ok', text: 'prepared' }),
+        h('button', { type: 'button', class: 'compact', onclick: () => openFolder(f.prepared) }, 'Show in folder')) : null),
+      h('td', {}, h('div', { class: 'row' }, prepare, remove)));
+  });
+  const filesCard = h('div', { class: 'card' },
+    h('h2', { text: `Files for ${title}` }),
+    drop,
+    info.unreadable.map(u => h('div', { class: 'notice bad', text: `${u.name}: ${u.error}` })),
+    info.files.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
+      h('thead', {}, h('tr', {}, ['File', 'Kind', 'Transactions', 'Dates', 'Account', 'Prepared', ''].map(t => h('th', { text: t })))),
+      h('tbody', {}, fileRows))) : h('p', { class: 'muted', text: 'No files added for this month yet.' }));
+
+  async function showPreview(file, account) {
+    previewArea.replaceChildren(await importPreview(month, file, account, () => viewImports()));
+    previewArea.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  const record = info.record.length ? [h('h2', { text: 'Import record' }), h('div', { class: 'card' },
+    h('p', { class: 'small muted', text: 'Which file went to which account, every month. File names seen before are linked to the same account next time.' }),
+    dataTable(['month', 'file', 'account', 'transactions', 'categories_written', 'prepared', 'linked_on'],
+      info.record.map(x => [x.month, x.file, x.account_name || '', x.transactions ?? '', x.categorised ?? '',
+        x.prepared ? 'yes' : 'no', String(x.linked || '').replace('T', ' ')]), { pageSize: 50 }))] : [];
+
+  main(h('h1', { text: 'Prepare imports' }),
+    h('p', { class: 'lead', text: 'Add the files you downloaded from your banks for a month. Each file is linked to its account, and categories ' +
+      'are filled in from that account\'s own history, which HomeBank\'s rules cannot do. The prepared copy is what you import in HomeBank. ' +
+      'Your downloads are never changed.' }),
+    monthRow, accountsCard, filesCard, previewArea, record);
+}
+
+async function importPreview(month, file, account, onSaved) {
+  const q = `month=${encodeURIComponent(month)}&file=${encodeURIComponent(file)}&account=${encodeURIComponent(account)}`;
+  const res = await api(`/api/import/preview?${q}`);
+  const catSet = new Set((app.categories || []).map(c => c.toLowerCase()));
+  const rows = res.rows.map(r => ({ ...r, value: r.skip ? '' : r.suggested }));
+  const facts = h('div', { class: 'facts' });
+  const fact = (value, label) => h('div', { class: 'fact' }, h('b', { text: value }), h('span', { text: label }));
+  function drawFacts() {
+    const open = rows.filter(r => !r.skip);
+    const filled = open.filter(r => r.value.trim()).length;
+    const byHomeBank = open.filter(r => !r.value.trim() && r.homebank).length;
+    facts.replaceChildren(
+      fact(rows.length, 'transactions'),
+      fact(filled, 'get a category from this file'),
+      fact(byHomeBank, 'left to your HomeBank rules'),
+      fact(open.length - filled - byHomeBank, 'stay without a category'),
+      fact(rows.filter(r => r.duplicate).length, 'may already be in HomeBank'));
+  }
+  const body = rows.map(r => {
+    // An overwrite rule only matters when it would put another category than the one written.
+    const pill = r.overwritten_by ? h('span', { class: 'pill bad', text: `rule ${r.overwritten_by} overwrites`,
+      title: `Your overwrite rule ${r.overwritten_by} will replace the category with ${r.overwrite_category || 'its own'} on import` }) : null;
+    const tr = h('tr');
+    const checkOverwrite = () => {
+      const clash = !!pill && !!r.value.trim() && r.value.trim().toLowerCase() !== (r.overwrite_category || '').toLowerCase();
+      if (pill) pill.hidden = !clash;
+      tr.classList.toggle('warn-row', clash);
+    };
+    let cell;
+    if (r.skip) {
+      cell = h('span', { class: 'muted', text: r.skip === 'already has a category' ? `${r.in_file} (in the file)` : r.skip });
+    } else {
+      cell = h('input', { type: 'text', value: r.value, list: 'category-list', placeholder: r.homebank ? `HomeBank: ${r.homebank}` : '',
+        class: r.value && !catSet.has(r.value.toLowerCase()) ? 'invalid' : null,
+        oninput: e => {
+          r.value = e.target.value;
+          e.target.classList.toggle('invalid', !!r.value.trim() && !catSet.has(r.value.trim().toLowerCase()));
+          checkOverwrite();
+          drawFacts();
+        } });
+    }
+    let why = '';
+    if (r.suggested) why = r.evidence;
+    else if (r.homebank) why = `HomeBank will set ${r.homebank} (${r.homebank_by})`;
+    else if (!r.skip) why = 'nothing to go on';
+    tr.append(
+      h('td', { class: 'nowrap', text: r.date }), h('td', { text: r.memo }), h('td', { text: r.payee }),
+      h('td', { class: 'num', text: r.amount === null ? '' : Number(r.amount).toFixed(2) }),
+      h('td', {}, cell),
+      h('td', { class: `small ${r.source === 'all accounts' ? 'warn-text' : 'muted'}`, text: why }),
+      h('td', {},
+        r.duplicate ? h('span', { class: 'pill warn', text: 'already in HomeBank?', title: 'Same date, amount and description already in this account' }) : null,
+        pill));
+    checkOverwrite();
+    return tr;
+  });
+  drawFacts();
+  const result = h('div');
+  const save = h('button', { type: 'button', class: 'primary' }, 'Save prepared file');
+  save.addEventListener('click', () => {
+    const bad = rows.filter(r => !r.skip && r.value.trim() && !catSet.has(r.value.trim().toLowerCase())).length;
+    if (bad) { toast(`${bad} category name(s) do not exist in your HomeBank file. Pick one from the list or leave it empty.`, true); return; }
+    busy(save, 'Saving', async () => {
+      const categories = Object.fromEntries(rows.filter(r => !r.skip && r.value.trim()).map(r => [r.index, r.value.trim()]));
+      const out = await api('/api/import/prepare', { month, file, account, categories });
+      result.replaceChildren(h('div', { class: 'notice' },
+        h('p', { text: `Saved with ${out.categorised} categor${out.categorised === 1 ? 'y' : 'ies'}: ${out.path}` }),
+        h('p', { text: `In HomeBank: File > Import…, choose this prepared file and import it into "${out.account_name}". ` +
+          'Keep automatic assignment switched on so your rules fill the rest.' }),
+        h('button', { type: 'button', onclick: () => openFolder(out.path) }, 'Show in folder')));
+      toast('Prepared file saved.');
+      setTimeout(onSaved, 4000);
+    });
+  });
+  return h('div', { class: 'card' },
+    h('h2', { text: `${file} → ${res.account_name}` }),
+    h('p', { class: 'small muted', text: 'Categories are filled in from this account\'s latest transactions with the same description (or, failing that, from all accounts, shown in orange). ' +
+      'Change or clear any of them. HomeBank keeps a category from the file; only an "overwrite" rule replaces it. Transfers, splits and rows that already have a category are left as they are.' }),
+    res.problems.length ? h('div', { class: 'notice warn', text: `Lines HomeBank may not read as transactions: ${res.problems.join(', ')}.` }) : null,
+    facts,
+    h('datalist', { id: 'category-list' }, (app.categories || []).map(c => h('option', { value: c }))),
+    h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
+      h('thead', {}, h('tr', {}, ['Date', 'Description', 'Payee', 'Amount', 'Category to write', 'Why', ''].map(t => h('th', { text: t })))),
+      h('tbody', {}, body))),
+    h('div', { class: 'toolbar' }, h('span', { class: 'spacer' }), save),
+    result);
+}
+
 // --- results -----------------------------------------------------------------------------------------------
 
 async function viewResults() {
@@ -722,7 +981,7 @@ async function viewExport() {
 
 // --- navigation ---------------------------------------------------------------------------------------------
 
-const VIEWS = { file: viewFile, analyse: viewAnalyse, review: viewReview, reports: viewReports, results: viewResults, export: viewExport };
+const VIEWS = { file: viewFile, analyse: viewAnalyse, review: viewReview, imports: viewImports, reports: viewReports, results: viewResults, export: viewExport };
 
 function updateHeader() {
   const s = app.status;

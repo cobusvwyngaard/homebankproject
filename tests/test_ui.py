@@ -347,3 +347,90 @@ class ReportsApiTests(ServerTestCase):
         conn = sqlite3.connect(self.out / "homebank.sqlite")
         self.assertGreater(conn.execute("SELECT COUNT(*) FROM r_period_totals").fetchone()[0], 0)
         conn.close()
+
+
+class ImportPageTests(ServerTestCase):
+    """The imports page: month, files, accounts, preview and prepared files (made-up files only)."""
+
+    def setUp(self):
+        super().setUp()
+        self.src.write_bytes(sample(home_loans=True).data)
+
+    def upload(self, month, name, raw):
+        import base64
+
+        return self.request("POST", "/api/import/upload",
+                            {"month": month, "name": name, "content": base64.b64encode(raw).decode()})
+
+    def test_month_flow(self):
+        from hbkit.fixtures.generator import ACC_LOAN_A, ACC_LOAN_B
+
+        from .test_import_prepare import LOAN_A
+
+        info = self.api("/api/import/month?month=2025-10")
+        accounts = {a["key"]: a for a in info["accounts"]}
+        self.assertTrue(accounts[ACC_LOAN_A]["expected"])
+        self.assertEqual((info["files"], info["expected_chosen"]), ([], False))
+
+        status, res, _ = self.upload("2025-10", "Loan_A.qif", LOAN_A)
+        self.assertEqual((status, res["name"]), (200, "Loan_A.qif"))
+        (f,) = self.api("/api/import/month?month=2025-10")["files"]
+        self.assertEqual((f["account"], f["suggested"], f["transactions"]), (None, ACC_LOAN_A, 4))
+        self.assertTrue(f["reason"].startswith("from its contents"))
+
+        self.api("/api/import/link", {"month": "2025-10", "file": "Loan_A.qif", "account": ACC_LOAN_A})
+        info = self.api("/api/import/month?month=2025-10")
+        self.assertEqual(info["files"][0]["account"], ACC_LOAN_A)
+        self.assertEqual({a["key"]: a["files"] for a in info["accounts"]}[ACC_LOAN_A],
+                         [{"name": "Loan_A.qif", "prepared": False}])
+
+        preview = self.api(f"/api/import/preview?month=2025-10&file=Loan_A.qif&account={ACC_LOAN_A}")
+        self.assertEqual([r["suggested"] for r in preview["rows"]][2], "Property A:Bond interest")
+        other = self.api(f"/api/import/preview?month=2025-10&file=Loan_A.qif&account={ACC_LOAN_B}")
+        self.assertEqual([r["suggested"] for r in other["rows"]][2], "Property B:Bond interest")
+
+        done = self.api("/api/import/prepare", {"month": "2025-10", "file": "Loan_A.qif", "account": ACC_LOAN_A,
+                                                "categories": {"1": "Property A:Insurance", "2": "Property A:Bond interest"}})
+        self.assertEqual((done["categorised"], done["rel"]), (2, "imports/2025-10/prepared/Loan_A-prepared.qif"))
+        prepared = self.out / done["rel"]
+        self.assertIn(b"LProperty A:Bond interest", prepared.read_bytes())
+        self.assertEqual((self.out / "imports/2025-10/originals/Loan_A.qif").read_bytes(), LOAN_A)
+        memory = json.loads((self.data / "import-accounts.json").read_text())
+        (link,) = memory["links"]
+        self.assertEqual((link["account"], link["categorised"], link["file"]), (ACC_LOAN_A, 2, "Loan_A.qif"))
+
+        # Next month: the same file name is linked to the same account.
+        self.upload("2025-11", "Loan_A.qif", LOAN_A.replace(b"/10/2025", b"/11/2025"))
+        (f,) = self.api("/api/import/month?month=2025-11")["files"]
+        self.assertEqual((f["suggested"], f["reason"]), (ACC_LOAN_A, "same file name as in 2025-10"))
+        record = self.api("/api/import/month?month=2025-11")["record"]
+        self.assertEqual([r["month"] for r in record], ["2025-10"])
+
+        self.api("/api/import/expected", {"accounts": [ACC_LOAN_B]})
+        info = self.api("/api/import/month?month=2025-11")
+        self.assertTrue(info["expected_chosen"])
+        self.assertEqual([a["key"] for a in info["accounts"] if a["expected"]], [ACC_LOAN_B])
+
+        self.api("/api/import/remove", {"month": "2025-10", "file": "Loan_A.qif"})
+        self.assertFalse(prepared.exists())
+        self.assertEqual(self.api("/api/import/month?month=2025-10")["files"], [])
+
+    def test_bad_requests(self):
+        from .test_import_prepare import LOAN_A
+
+        status, res, _ = self.upload("2025-10", "../../outside.qif", LOAN_A)  # stays in the month folder
+        self.assertEqual((status, res["name"]), (200, "outside.qif"))
+        self.assertTrue((self.out / "imports/2025-10/originals/outside.qif").is_file())
+        self.assertEqual(self.upload("2025-13", "a.qif", LOAN_A)[0], 400)
+        self.assertEqual(self.upload("2025-10", "notes.csv", b"hello\n")[0], 400)
+        status, _, _ = self.request("POST", "/api/import/upload", {"month": "2025-10", "name": "a.qif", "content": "%%"})
+        self.assertEqual(status, 400)
+        self.assertEqual(self.request("GET", "/api/import/preview?month=2025-10&file=../review.csv&account=7")[0], 400)
+        self.assertEqual(self.request("GET", "/api/import/preview?month=2025-10&file=outside.qif&account=999")[0], 400)
+        status, res, _ = self.request("POST", "/api/import/prepare", {
+            "month": "2025-10", "file": "outside.qif", "account": 7, "categories": {"2": "No such category"}})
+        self.assertEqual(status, 400)
+        self.assertIn("does not exist", res["error"])
+        self.assertEqual(self.request("POST", "/api/import/link", {"month": "2025-10", "file": "outside.qif",
+                                                                   "account": "x"})[0], 400)
+        self.assertEqual(self.request("POST", "/api/import/expected", {"accounts": "7"})[0], 400)
