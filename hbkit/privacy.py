@@ -63,11 +63,6 @@ class Summary:
             raise TypeError("Summary.count() accepts integers only")
         self.rows.append(_Row("count", label, value))
 
-    def year(self, label: str, value: int) -> None:
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise TypeError("Summary.year() accepts integers only")
-        self.rows.append(_Row("year", label, value))
-
     def number(self, label: str, value: float, decimals: int = 1, unit: str = "") -> None:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise TypeError("Summary.number() accepts numbers only")
@@ -93,8 +88,6 @@ class Summary:
                 out.append(f"  {r.label}")
             elif r.kind == "count":
                 out.append(f"  {r.label:<{width}}  {r.value:>10,}".replace(",", " "))
-            elif r.kind == "year":
-                out.append(f"  {r.label:<{width}}  {r.value:>10}")
             elif r.kind == "number":
                 decimals, unit = r.extra
                 out.append(f"  {r.label:<{width}}  {r.value:>10.{decimals}f}{(' ' + unit) if unit else ''}")

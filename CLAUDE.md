@@ -58,32 +58,46 @@ Practical consequence: never put the literal text `data/` in a shell command
 ## Commands for development
 
 ```
-python3.13 -m venv .venv                       # once
-.venv/bin/python -m unittest discover -s tests -t .   # all tests (Windows: .venv\Scripts\python)
-.venv/bin/python -m hbkit --help
+python3.13 -m venv .venv                                  # once
+.venv/bin/python -m unittest discover -s tests -t .       # all tests (Windows: .venv\Scripts\python)
+.venv/bin/python -m hbkit --help                          # Windows: .\hb --help (hb.cmd)
 ```
 
-Try commands on a synthetic file only, e.g. `python -m hbkit generate-sample --output <tmp>/s.xhb`
-then `python -m hbkit structure --file <tmp>/s.xhb`.
+Try commands on a synthetic file only, e.g.
+`python -m hbkit generate-sample --output <scratch>/s.xhb`, then
+`python -m hbkit run rule-mining --file <scratch>/s.xhb --out <scratch>/out`.
 
 ## Layout
 
 ```
-hbkit/cli.py              command-line interface (python -m hbkit)
-hbkit/privacy.py          Summary (numbers only), Terminal (hides file text), output folders
-hbkit/errors.py           exceptions with terminal-safe messages
-hbkit/xhb/format.py       constants from HomeBank's source
-hbkit/xhb/scanner.py      byte-exact, GMarkup-like scanner
-hbkit/xhb/reader.py       scanner output -> typed objects (model.py)
-hbkit/xhb/serialise.py    HomeBank 5.10.3 save functions, line for line
-hbkit/xhb/structure.py    structure report (no values)
+hbkit/cli.py                 command-line interface (python -m hbkit; hb.cmd on Windows)
+hbkit/privacy.py             Summary (numbers only), Terminal (hides file text), output folders
+hbkit/errors.py              exceptions with terminal-safe messages
+hbkit/xhb/format.py          constants from HomeBank's source
+hbkit/xhb/scanner.py         byte-exact, GMarkup-like scanner
+hbkit/xhb/reader.py          scanner output -> typed objects (model.py)
+hbkit/xhb/serialise.py       HomeBank 5.10.3 save functions, line for line
+hbkit/xhb/writer.py          targeted edits to a NEW copy (verified before saving)
+hbkit/xhb/structure.py       structure report (no values)
+hbkit/export/sqlite.py       SQLite export; schema documented in docs/sqlite-schema.md
+hbkit/rules/engine.py        simulator of HomeBank's rule application
+hbkit/rules/normalise.py     cleaning of bank descriptions
+hbkit/rules/mining.py        rule mining, back-test, existing-rule scores, overlaps
+hbkit/analyses/              one module per analysis (ANALYSIS = ...), auto-discovered
 hbkit/fixtures/generator.py  synthetic .xhb files for tests and trying things out
-tests/                    unittest; fixtures/homebank_example = HomeBank's own example.xhb (GPL)
-docs/xhb-format.md        what was learnt about the format, with source references
+tests/                       unittest; fixtures/homebank_example = HomeBank's own example.xhb (GPL)
+docs/                        xhb-format.md, sqlite-schema.md, adding-an-analysis.md
 ```
+
+## Adding an analysis
+
+Follow docs/adding-an-analysis.md: one module in `hbkit/analyses/` plus
+`tests/test_<name>.py`. `tests/test_analyses.py` automatically checks every analysis
+for file text reaching the screen. Update README.md (command list) when adding one.
 
 ## Status
 
-Plan approved by the owner (Windows user; descriptions are in the memo field;
-merchant-level rule merging switched on). Stage 1 (reader, generator, structure
-report) done. Next: writer, SQLite export, analysis framework, rule mining, README.
+All six stages of the approved plan are built: reader + structure report, writer,
+SQLite export, analysis framework, rule mining + apply-rules, README. The owner is a
+Windows user; descriptions are in the memo field; merged merchant-level rules are on.
+Next step is the owner running `structure` on the real file and sharing the output.
