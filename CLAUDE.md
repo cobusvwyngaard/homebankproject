@@ -124,7 +124,10 @@ for file text reaching the screen. Update README.md (command list) when adding o
 ## Status
 
 Built: reader + structure report, writer, SQLite export, analysis framework, rule
-mining + apply-rules, browser interface (`hb ui`), and the reporting layer (settings,
+mining + apply-rules (with account rules for descriptions whose category depends on the
+account, `rule_transactions.csv`, `account_dependent.csv`), browser interface (`hb ui`;
+the rule review page shows each rule's transactions and downloads CSVs in the browser),
+`INSTRUCTIONS.txt` for people who download the ZIP, and the reporting layer (settings,
 `r_*` views, report framework) with three reports: annual-overview, category-trends,
 tax-year-statement (also on the Reports page of the browser interface). The owner is a
 Windows user (HomeBank 5.8.5 file, 27k transactions, 46 accounts, 163 categories);

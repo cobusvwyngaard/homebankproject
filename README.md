@@ -19,6 +19,9 @@ You can use it in your **web browser** (easiest) or by typing commands in PowerS
 It needs only Python. The reports also use one chart library (Plotly), which is included
 in the project and installs without internet.
 
+**Just downloaded the ZIP?** Follow [INSTRUCTIONS.txt](INSTRUCTIONS.txt) in this folder:
+the set-up below in short form, plus what to do when something goes wrong.
+
 ---
 
 ## Your privacy
@@ -52,7 +55,7 @@ These steps are for Windows and do not need administrator rights.
 Open PowerShell (Start menu → type `PowerShell`) and run:
 
 ```powershell
-py -3.13 --version
+python --version
 ```
 
 If it prints `Python 3.13.…`, go to step 2. If not, install Python 3.13 for your user
@@ -62,10 +65,13 @@ only (no admin rights needed), following the official
 * **Python install manager** (what python.org now recommends): install it from
   <https://www.python.org/downloads/> or from the Microsoft Store, then run
   `py install 3.13`; or
-* the classic **Python 3.13 installer** from python.org, choosing *Install Now*.
+* the classic **Python 3.13 installer** from python.org: on its first screen untick
+  *Use admin privileges when installing py.exe*, tick *Add python.exe to PATH*, then
+  choose *Install Now*.
 
-Then run `py -3.13 --version` again. (If `py` is not recognised but `python --version`
-shows 3.13, use `python` wherever this guide says `py -3.13`.)
+Then open a new PowerShell window and check again. If `python --version` shows another
+version but `py -3.13 --version` shows 3.13, use `py -3.13` wherever this guide says
+`python`.
 
 ### 2. Get the toolkit
 
@@ -75,7 +81,11 @@ Either:
   Clone repository* → `cobusvwyngaard/homebankproject`, then choose the branch that holds
   the toolkit; or
 * on the GitHub website: open the repository, choose the branch, then *Code →
-  Download ZIP*, and unzip it, e.g. to `Documents\homebankproject`.
+  Download ZIP*, and unzip it, e.g. to `Documents\homebankproject`. Windows often puts
+  the project in a folder inside a folder of the same name: the project folder is the
+  one that contains `INSTRUCTIONS.txt` and `hb-ui.cmd`. Rename or move it now if you
+  want to, because the environment of step 3 stops working when the folder is moved
+  (if that happens, delete `.venv` and repeat steps 3 and 5).
 
 ### 3. Create the project's Python environment
 
@@ -84,10 +94,10 @@ of Python for this project, in the folder `.venv`):
 
 ```powershell
 cd $HOME\Documents\homebankproject
-py -3.13 -m venv .venv
+python -m venv .venv
 ```
 
-Check that everything works by running the tests (about 20 seconds):
+Check that everything works by running the tests (about a minute):
 
 ```powershell
 .venv\Scripts\python -m unittest discover -s tests -t .
@@ -138,9 +148,19 @@ The pages, from left to right:
 3. **Rule review** — the suggested rules in a table. Tick the ones you want, change the
    text or category if you like (the category box suggests your categories as you type),
    filter and sort, then click **Add approved rules to a new copy…**. *Save approvals*
-   keeps your ticks for later. Other tabs show your existing rules with their scores,
-   inconsistent descriptions, overlapping rules, the back-test and the suggestions that
-   were set aside.
+   keeps your ticks for later.
+   * **View** shows every transaction a rule matches, so you can check that they belong
+     together: grouped by description (card numbers, dates and references removed), or
+     one by one, with how many have the rule's category, another category (highlighted)
+     or none yet. You can change the text there and click *Show matches* to see what the
+     new text would catch. *Previous rule* / *Next rule* step through the rules as shown.
+   * **Download shown (CSV)** saves the rules as currently filtered, with your ticks and
+     edits, to your browser's Downloads folder (same columns as `review.csv`, so it also
+     works with `apply-rules`). Each *View* window can download its transactions too.
+     Downloaded files contain your data like everything in `data\out`; keep them private.
+   * Other tabs show your existing rules with their scores, inconsistent descriptions,
+     descriptions whose category **depends on the account**, overlapping rules, the
+     back-test and the suggestions that were set aside.
 4. **Reports** — make a report (choose the years and options), then *Open report*. It
    also shows which settings file is used, and lists the reports you made before.
 5. **Results** — every result file of every analysis run, as sortable tables.
@@ -170,6 +190,14 @@ see its options, e.g. `.\hb run rule-mining --help`.
 .\hb generate-sample
 .\hb structure --file data\out\sample.xhb
 .\hb run rule-mining --file data\out\sample.xhb
+```
+
+With two made-up home loans whose transactions are categorised by account (to see
+account rules):
+
+```powershell
+.\hb generate-sample --home-loans --output data\out\sample-loans.xhb
+.\hb run rule-mining --file data\out\sample-loans.xhb
 ```
 
 And for the reports (a fake file with rental and medical data, plus a fake CPI table and
@@ -243,12 +271,29 @@ suggests such rules.
 4. **Merged rules.** One rule can also cover several patterns, e.g. `WOOLWORTHS` for all
    branches, when that still reaches 95%. These are marked `merged`, and the branch
    rules they cover show it in the `covered_by` column. You choose which ones to approve.
-5. **Back-test.** To see how well this works, rules are built from all years except the
+5. **Account rules.** Sometimes the same description gets a different category depending
+   on the account — for example interest on two home loans that belong to two rental
+   properties. **HomeBank's rules cannot be limited to one account**: a rule only looks
+   at the memo (or payee), optionally the amount, and applies to every account. So:
+   * Where the descriptions differ in some fixed detail that cleaning removes, such as a
+     loan or policy number (`BOND INSURANCE PREMIUM POLICY 4410023`), that text becomes
+     an **account rule** (kind `account`): tested on all accounts like any other rule,
+     and placed before the general rules so it wins.
+   * Where the descriptions are identical (`HOME LOAN INTEREST` in both loan accounts),
+     no HomeBank rule can tell them apart. These are listed in `account_dependent.csv`
+     (and the *Depends on account* tab) so you know to categorise them by hand.
+   * A suggested rule that another account contradicts (e.g. `UBER` is ride hailing on
+     your own card but business travel on the business card) says so in its notes and
+     in the column `other_accounts_differ`.
+
+   "Consistent in an account" uses the same thresholds as everything else: at least 5
+   transactions of that description in the account, 95% of them in one category.
+6. **Back-test.** To see how well this works, rules are built from all years except the
    latest two calendar years, then tested on those two years: how many transactions would
    get the right category, the wrong one, or none. This is reported for your existing
    rules alone, the new rules alone, and both together (existing rules first, as
    HomeBank would apply them).
-6. **Checks.**
+7. **Checks.**
    * Descriptions you categorised inconsistently.
    * Rules that match the same transactions. HomeBank applies rules in order, and for
      "set category" rules the first match wins.
@@ -275,6 +320,8 @@ The suggestions in `review.csv` are then built from **all** years.
 | File | What it holds |
 |---|---|
 | `review.csv` | the suggested rules — this is the one you work with |
+| `rule_transactions.csv` | every transaction each suggested rule matches, with its `result`: same category, other category, or none yet (the rule would fill it) |
+| `account_dependent.csv` | descriptions whose category depends on the account, per account, with the account rule suggested or why there is none |
 | `rejected_candidates.csv` | consistent patterns that did not become suggestions, and why |
 | `backtest.csv`, `backtest_by_category.csv` | the back-test results |
 | `existing_rules.csv` | the score and status of each of your existing rules |
@@ -289,6 +336,10 @@ Useful columns in `review.csv`:
 * `backtest_*` — how the same rule did in the back-test;
 * `conflicts_with_existing_rules` — existing rules that give the same transactions
   another category;
+* `kind` and `for_account` — `pattern`, `merged`, or `account` (with the account whose
+  transactions the text picks out);
+* `other_accounts_differ` — accounts where these transactions usually have another
+  category;
 * `existing_rules_already_right_pct` — how often your existing rules already get these
   right;
 * `examples` — up to three memos.
@@ -312,8 +363,8 @@ it:
 
    This writes a new file `data\out\with-rules_<date_time>.xhb`. Your original is not
    touched.
-   * The new rules are placed after your existing ones, longer (more specific) texts
-     first.
+   * The new rules are placed after your existing ones: account rules first, then longer
+     (more specific) texts before shorter ones.
    * They match "contains, ignoring case" on the memo, and set the category only when
      it is empty.
    * Approved rows are skipped, and counted on screen, when the category no longer
@@ -466,7 +517,8 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 | `… .xhb files found in the data folder` | Keep one file there, or choose one with `--file`. |
 | `the database could not be replaced` | Close the database in DB Browser (or any other program) and run again. |
 | `Unexpected error (…)` | The details were written to `data\out\errors\`. They may contain text from your file, so do not paste them anywhere. Tell Claude the error type and what you ran instead. |
-| `py` is not recognised | Python is not installed, or was installed without the launcher; reinstall Python 3.13 as above. |
+| `python` (or `py`) is not recognised, or the Microsoft Store opens | Python is not installed or not on the PATH; install Python 3.13 as in step 1, then open a new PowerShell window. |
+| `The toolkit's Python environment was not found in this folder` | Do step 3 in the folder that contains `hb-ui.cmd` (also after moving or renaming the folder: delete `.venv` first). |
 | `.\hb` does nothing / `.venv` missing | Do step 3 of the set-up again. |
 | The browser says "missing or wrong key" | Use the full address shown in the black window (it ends in `#token=…`); the key changes each time the toolkit starts. |
 | The browser page stops responding | The black window was closed. Start `hb-ui.cmd` again. |

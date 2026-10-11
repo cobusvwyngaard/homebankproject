@@ -1,4 +1,6 @@
 # Windows batch files need CRLF line endings
 *.cmd text eol=crlf
+# Opened in Notepad by people who download the ZIP
+INSTRUCTIONS.txt text eol=crlf
 # Keep test fixtures byte for byte
 *.xhb -text

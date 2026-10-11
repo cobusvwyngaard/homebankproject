@@ -1,0 +1,134 @@
+HomeBank toolkit - how to get it running after downloading the ZIP
+==================================================================
+
+For Windows 10 or 11. No administrator rights and, after the download,
+no internet are needed. The first time takes about 10 minutes.
+README.md has the full guide; this file is the short version.
+
+
+1. UNPACK THE ZIP
+-----------------
+a. Optional, avoids security warnings later: right-click the ZIP file,
+   choose Properties, tick "Unblock" at the bottom (if it is there),
+   click OK.
+b. Right-click the ZIP file > Extract All... > choose a place such as
+   your Documents folder > Extract.
+c. Open the extracted folder until you see INSTRUCTIONS.txt, hb-ui.cmd,
+   README.md and the folders data, hbkit and tests. That is the
+   PROJECT FOLDER. (Windows often makes a folder inside a folder with
+   the same name.)
+d. If you want to rename the folder (e.g. to homebankproject) or move
+   it, do it NOW, before step 3.
+
+
+2. OPEN POWERSHELL IN THE PROJECT FOLDER AND CHECK PYTHON
+---------------------------------------------------------
+a. In File Explorer, open the project folder, click in the address bar
+   at the top, type  powershell  and press Enter. A PowerShell window
+   opens in that folder.
+b. Type this and press Enter:
+
+       python --version
+
+   - "Python 3.13.something": good, go to step 3.
+   - An error, an older version, or the Microsoft Store opens: install
+     Python 3.13 for your user only (no admin rights needed), from
+     https://www.python.org/downloads/windows/ - choose the latest
+     "Python 3.13" Windows installer (64-bit). On its first screen:
+     UNtick "Use admin privileges when installing py.exe", tick
+     "Add python.exe to PATH", then click "Install Now". Close
+     PowerShell, open it again as in 2a, and repeat 2b.
+   - If several Python versions are installed and  py -3.13 --version
+     shows 3.13, type  py -3.13  wherever these steps say  python .
+
+
+3. CREATE THE TOOLKIT'S PYTHON ENVIRONMENT (ONCE)
+-------------------------------------------------
+In the same PowerShell window (in the project folder):
+
+       python -m venv .venv
+
+This makes a folder .venv with a private copy of Python for the
+toolkit. It takes a few seconds and prints nothing when it works.
+
+
+4. INSTALL THE CHART LIBRARY FOR THE REPORTS (ONCE, OFFLINE)
+------------------------------------------------------------
+       .venv\Scripts\python -m pip install --no-index --find-links vendor\wheels -r requirements.txt
+
+It installs from the vendor\wheels folder in the project; nothing is
+downloaded. It should say "Successfully installed narwhals... packaging...
+plotly...". (A notice about a newer pip version can be ignored.)
+
+
+5. CHECK THAT EVERYTHING WORKS
+------------------------------
+       .venv\Scripts\python -m unittest discover -s tests -t .
+
+This takes about a minute. The last line should say OK (a few
+"skipped" tests are fine).
+
+
+6. PUT YOUR HOMEBANK FILE IN THE DATA FOLDER
+--------------------------------------------
+Close HomeBank. COPY (do not move) your .xhb file into the "data"
+folder inside the project folder. When exactly one .xhb file is there,
+the toolkit uses it automatically.
+
+Whenever you have made new entries in HomeBank, copy the file again.
+
+
+7. START THE TOOLKIT
+--------------------
+Double-click hb-ui.cmd in the project folder.
+
+A black window opens and your web browser shows the toolkit. Keep the
+black window open while you work: it IS the toolkit. Close it when you
+are done. If the browser does not open by itself, copy the address
+shown in the black window (http://127.0.0.1:...#token=...) into it.
+
+Then, in the browser: 2. Analyse > rule-mining > Run, and
+3. Rule review to go through the suggested rules. Your original
+HomeBank file is never changed: approved rules are written to a NEW
+copy in data\out.
+
+Optional, for the reports: copy settings.example.toml into the data
+folder, rename the copy to settings.toml and edit it (see README.md,
+section "Reports").
+
+
+PRIVACY
+-------
+Everything runs on your own computer; nothing is sent anywhere. The
+data folder holds your file and all results. Never share or upload it,
+and never paste transaction details into a chat.
+
+
+IF SOMETHING GOES WRONG
+-----------------------
+"The system cannot find the path specified" or "The toolkit's Python
+environment was not found" when starting hb-ui.cmd
+    Step 3 was not done in THIS folder. Open PowerShell in the folder
+    that contains hb-ui.cmd (step 2a) and do steps 3 and 4.
+
+"python is not recognized" or the Microsoft Store opens
+    Python is not installed, or "Add python.exe to PATH" was not
+    ticked. Install it as in step 2b, then open a NEW PowerShell window.
+
+"Windows protected your PC" or a security warning for hb-ui.cmd
+    The file came from the internet. Click "More info" > "Run anyway"
+    (or "Run"), or unblock the ZIP as in step 1a and unpack it again.
+
+The folder was renamed or moved after step 3
+    Delete the .venv folder inside it and do steps 3 and 4 again.
+
+A report says the chart library (Plotly) is not installed
+    Do step 4.
+
+"no .xhb file found in the data folder"
+    Do step 6. If there are several .xhb files there, keep only one.
+
+Updating to a newer version of the toolkit
+    Download and unpack the new ZIP, do steps 3 to 5 in the new folder,
+    then copy the CONTENTS of the old data folder (your file, settings
+    and results) into the new data folder.

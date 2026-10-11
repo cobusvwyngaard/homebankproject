@@ -107,6 +107,11 @@ website notes tpl grp ccday rdate`
    using the split's memo and amount; a split category is set if empty, or always
    when the rule has flag 1024.
 6. Reconciled transactions are skipped when the "lock reconciled" option is on.
+7. **Rules have no account condition.** `struct _assign` (hb-assign.h) holds only the
+   search text, field, flags, notes, payee, category, payment mode, position, amount and
+   tags. The `kacc` argument of `transaction_auto_assign(txn_list, kacc, lockrecon)` only
+   limits a manual run to one account's transactions (0 = all); every rule still applies.
+   A rule can therefore only treat accounts differently through the text it matches.
 
 ### `<ope>` — transaction
 `date amount account damt dst_account paymode grpflg st flags payee category wording
