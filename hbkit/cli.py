@@ -85,6 +85,52 @@ def cmd_generate_sample(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_list(args: argparse.Namespace) -> int:
+    from .analyses import discover
+
+    term = Terminal()
+    term.line("Analyses (run with: python -m hbkit run <name> [options]):")
+    for name, analysis in discover().items():
+        term.line(f"  {name:<16} {analysis.description}")
+        for c in analysis.commands:
+            term.line(f"    related command: {c.name} - {c.help}")
+    term.line("")
+    term.line("Options of one analysis: python -m hbkit run <name> --help")
+    return 0
+
+
+def _run_analysis(args: argparse.Namespace) -> int:
+    from .analyses.base import Context
+    from .xhb.reader import read_file
+
+    analysis = args.analysis
+    path = _input_path(args)
+    book = read_file(path)
+    params = {p.name: getattr(args, p.name) for p in analysis.params}
+    ctx = Context(book=book, input_path=path, out_root=Path(args.out), analysis_name=analysis.name)
+    summary = analysis.run(ctx, params)
+    Terminal(book.sensitive_strings()).summary(summary)
+    return 0
+
+
+def _command_handler(command):
+    def handler(args: argparse.Namespace) -> int:
+        summary, book = command.run(args)
+        Terminal(book.sensitive_strings() if book else ()).summary(summary)
+        return 0
+
+    return handler
+
+
+def _add_param(p: argparse.ArgumentParser, param) -> None:
+    if param.type is bool:
+        p.add_argument(param.option, dest=param.name, action=argparse.BooleanOptionalAction,
+                       default=param.default, help=param.help)
+    else:
+        p.add_argument(param.option, dest=param.name, type=param.type, default=param.default,
+                       choices=param.choices, help=f"{param.help} (default: {param.default})")
+
+
 # --- parser ------------------------------------------------------------------------------------
 
 
@@ -98,6 +144,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--debug", action="store_true",
                         help="show full error details on screen (they may include text from your file)")
     sub = parser.add_subparsers(dest="command", metavar="<command>")
+
+    from .analyses import discover
+
+    analyses = discover()
+
+    p = sub.add_parser("list", help="list the available analyses")
+    p.set_defaults(handler=cmd_list)
+
+    p = sub.add_parser("run", help="run an analysis (see 'list')")
+    p.set_defaults(handler=cmd_list)  # "run" without a name lists the analyses
+    run_sub = p.add_subparsers(dest="analysis_name", metavar="<analysis>")
+    for name, analysis in analyses.items():
+        ap = run_sub.add_parser(name, help=analysis.description, description=analysis.description)
+        _add_file_option(ap)
+        _add_out_option(ap)
+        for param in analysis.params:
+            _add_param(ap, param)
+        ap.set_defaults(handler=_run_analysis, analysis=analysis)
+
+    for analysis in analyses.values():
+        for command in analysis.commands:
+            cp = sub.add_parser(command.name, help=command.help, description=command.help)
+            command.add_arguments(cp)
+            cp.set_defaults(handler=_command_handler(command))
 
     p = sub.add_parser("structure", help="show the file's structure (versions, element and attribute counts; no values)")
     _add_file_option(p)
