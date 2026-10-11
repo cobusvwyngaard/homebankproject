@@ -11,7 +11,8 @@ the way HomeBank 5.10.3 writes its files. Content:
 * merchants with known ("ground truth") categories, a few deliberately
   inconsistent ones, and one whose category changes over time;
 * existing assignment rules including deliberately bad ones (shadowed, dead,
-  broken target, weak regex, invalid regex, payee-field, overwrite).
+  broken target, weak regex, invalid regex, payee-field, overwrite);
+* optionally two home loans whose transactions are categorised by account.
 
 Options cover older file versions, Windows line endings, unknown attributes and
 elements, control characters, and a "sentinel" mode that marks every piece of
@@ -56,6 +57,10 @@ class GeneratorOptions:
     #: Extra content for the reports: rental property, medical tags, an account to
     #: exclude, transactions on the tax-year boundary, and prices rising each year.
     reporting: bool = False
+    #: Two home-loan accounts for two rental properties: interest with the same text in
+    #: both (only the account tells them apart) and insurance whose text differs only
+    #: by a policy number.
+    home_loans: bool = False
 
 
 @dataclass
@@ -118,6 +123,7 @@ PAYEES = [
 ]
 
 ACC_CHEQUE, ACC_CARD, ACC_SAVINGS, ACC_CASH, ACC_OLD, ACC_BUSINESS = 1, 2, 3, 4, 5, 6
+ACC_LOAN_A, ACC_LOAN_B = 7, 8
 
 #: Yearly price rise in reporting mode, and the categories only reporting mode adds.
 INFLATION = 0.05
@@ -127,6 +133,22 @@ REPORT_CATEGORIES = [
     (41, 40, "Rent received", True),
     (42, 40, "Levies", False),
     (44, 0, "Consulting", True),
+]
+
+#: Categories only the home-loan option adds: the same sub-categories for two properties.
+CAT_A_INTEREST, CAT_A_INSURANCE, CAT_B_INTEREST, CAT_B_INSURANCE = 51, 52, 54, 55
+HOME_LOAN_CATEGORIES = [
+    (50, 0, "Property A", False),
+    (51, 50, "Bond interest", False),
+    (52, 50, "Insurance", False),
+    (53, 0, "Property B", False),
+    (54, 53, "Bond interest", False),
+    (55, 53, "Insurance", False),
+]
+#: (account, interest category, insurance category, policy number, monthly interest)
+HOME_LOANS = [
+    (ACC_LOAN_A, CAT_A_INTEREST, CAT_A_INSURANCE, "4410023", 6200.0),
+    (ACC_LOAN_B, CAT_B_INTEREST, CAT_B_INSURANCE, "4410078", 4100.0),
 ]
 
 
@@ -445,6 +467,22 @@ class _Gen:
                          status=self.status_for(first, end), category_key=21,
                          memo=t("MEDICAL AID REFUND", "MEMO"))
 
+    def home_loan_events(self, end: date) -> None:
+        """Monthly interest and insurance on two home-loan accounts."""
+        r = self.rng
+        for acc, cat_interest, cat_insurance, policy, interest in HOME_LOANS:
+            for y, mth in self.months():
+                d = date(y, mth, 28)
+                if d > end:
+                    continue
+                self.add(date_julian=d.toordinal(), amount=-round(interest * r.uniform(0.95, 1.05), 2),
+                         account_key=acc, paymode=0, status=self.status_for(d, end),
+                         category_key=cat_interest, memo=self.t("HOME LOAN INTEREST", "MEMO"))
+                d = date(y, mth, 2)
+                self.add(date_julian=d.toordinal(), amount=-310.0, account_key=acc, paymode=11,
+                         status=self.status_for(d, end), category_key=cat_insurance,
+                         memo=self.t(f"BOND INSURANCE PREMIUM POLICY {policy}", "MEMO"))
+
     # --- static elements ------------------------------------------------------------------
 
     def static_elements(self, end: date) -> list[str]:
@@ -473,9 +511,18 @@ class _Gen:
         if self.o.reporting:
             accounts.append(Account(key=ACC_BUSINESS, pos=6, type=6, currency_key=1,
                                     name=t("Business account", "ACC"), initial=5000.0))
+        if self.o.home_loans:
+            accounts += [
+                Account(key=ACC_LOAN_A, pos=7, type=5, currency_key=1, name=t("Home loan A", "ACC"),
+                        initial=-900000.0),
+                Account(key=ACC_LOAN_B, pos=8, type=5, currency_key=1, name=t("Home loan B", "ACC"),
+                        initial=-600000.0),
+            ]
         lines += [S.serialise_account(a) for a in accounts]
         lines += [S.serialise_payee(Payee(key=k, name=t(n, "PAYEE"))) for k, n in PAYEES]
-        for key, parent, name, income in CATEGORIES + (REPORT_CATEGORIES if self.o.reporting else []):
+        categories = (CATEGORIES + (REPORT_CATEGORIES if self.o.reporting else [])
+                      + (HOME_LOAN_CATEGORIES if self.o.home_loans else []))
+        for key, parent, name, income in categories:
             flags = (F.GF_SUB if parent else 0) | (F.GF_INCOME if income else 0)
             budget = {}
             if key == 1:
@@ -534,6 +581,8 @@ class _Gen:
         self.transfers(end)
         if o.reporting:
             self.reporting_events(end)
+        if o.home_loans:
+            self.home_loan_events(end)
 
         # HomeBank writes transactions account by account, each sorted by date.
         ordered = sorted(enumerate(self.txns), key=lambda it: (it[1].account_key, it[1].date_julian, it[0]))
@@ -563,7 +612,7 @@ class _Gen:
 
 
 def _path(key: int) -> str:
-    names = {k: (p, n) for k, p, n, _ in CATEGORIES + REPORT_CATEGORIES}
+    names = {k: (p, n) for k, p, n, _ in CATEGORIES + REPORT_CATEGORIES + HOME_LOAN_CATEGORIES}
     parent, name = names[key]
     return f"{names[parent][1]}:{name}" if parent else name
 

@@ -15,12 +15,23 @@ The steps:
 4. **Merged candidates** (optional): shorter runs of words shared by the rule texts
    of two or more patterns (e.g. "WOOLWORTHS" for several branches), suggested when
    they meet the same thresholds.
-5. Back-test, scoring of existing rules, overlaps and inconsistent patterns are
+5. **Account-dependent patterns**: a pattern that is categorised consistently within
+   each account, but differently in different accounts (e.g. interest on two home
+   loans that belong to two rental properties). HomeBank's rules have no account
+   condition (``struct _assign`` in hb-assign.h: text, field, amount, payee,
+   category, payment mode and tags only), so a rule can only tell the accounts apart
+   through the text. For each such account the descriptions *as written* (numbers
+   included, e.g. a policy or loan number that cleaning removes) are searched for a
+   run of words that, applied the HomeBank way to every transaction, picks out that
+   account's transactions. These **account rules** come first in evaluation order.
+   Where the texts are identical, no rule can do it, and the pattern is reported.
+6. Back-test, scoring of existing rules, overlaps and inconsistent patterns are
    computed with the HomeBank simulator in engine.py.
 """
 
 from __future__ import annotations
 
+import re
 from collections import Counter, defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -57,10 +68,14 @@ class Item:
     year: int
     date: date
 
+    @property
+    def account(self) -> int:
+        return self.txn.account_key
+
 
 @dataclass
 class Candidate:
-    kind: str  # "pattern" or "merged"
+    kind: str  # "pattern", "merged" or "account"
     text: str  # rule text as it would go into HomeBank
     category_key: int
     pattern: str = ""
@@ -77,6 +92,11 @@ class Candidate:
     id: str = ""
     covered_by: str = ""
     notes: list[str] = field(default_factory=list)
+    #: For "account" rules: the account whose transactions the text picks out.
+    account_key: int = 0
+    #: Accounts whose matched transactions consistently have another category:
+    #: (account key, that category, number of transactions).
+    account_conflicts: list[tuple[int, int, int]] = field(default_factory=list)
 
     @property
     def matches(self) -> int:
@@ -196,7 +216,80 @@ def literal_rule_text(pattern: str, raw_texts: Sequence[str], min_len: int = 4) 
     return None
 
 
+_WORD = re.compile(r"\S+")
+
+
+def _raw_acceptable(text: str, words: list[str], min_len: int) -> bool:
+    """A run of words as written: long enough, with a real word or a long number, and
+    not starting or ending with a generic word such as "PAYMENT"."""
+    if len(text) < min_len:
+        return False
+    if not any(sum(c.isalpha() for c in w) >= 3 or sum(c.isdigit() for c in w) >= 5 for w in words):
+        return False
+    edges = [normalise(words[0]), normalise(words[-1])]
+    return not any(e and is_generic(e.split()) for e in edges)
+
+
+def raw_text_options(raw_texts: Sequence[str], min_len: int = 4,
+                     spellings: int = 3) -> list[tuple[str, float]]:
+    """Runs of whole words of the descriptions as written (numbers included).
+
+    Used for account rules, where the part that tells two accounts apart is often a
+    number that cleaning removes (a policy or loan number). Runs are taken from the
+    most common spellings and kept when found in at least MIN_TEXT_COVERAGE of the
+    texts (ignoring case). Returns (text, coverage) pairs, best first: found in every
+    text before found in most, then longer before shorter.
+    """
+    distinct = Counter(raw_texts)
+    total = sum(distinct.values())
+    if not total:
+        return []
+    folded = [(t.casefold(), n) for t, n in distinct.items()]
+    options: dict[str, float] = {}
+    seen: set[str] = set()
+    for raw, _ in distinct.most_common(spellings):
+        spans = [m.span() for m in _WORD.finditer(raw)]
+        for i in range(len(spans)):
+            for j in range(i + 1, len(spans) + 1):
+                text = raw[spans[i][0]:spans[j - 1][1]]
+                cf = text.casefold()
+                if cf in seen:
+                    continue
+                seen.add(cf)
+                words = [raw[a:b] for a, b in spans[i:j]]
+                if not _raw_acceptable(text, words, min_len):
+                    continue
+                coverage = sum(n for f, n in folded if cf in f) / total
+                if coverage >= MIN_TEXT_COVERAGE:
+                    options[text] = coverage
+    return sorted(options.items(), key=lambda kv: (kv[1] < 1.0, -len(kv[0]), kv[0]))
+
+
 # --- mining -----------------------------------------------------------------------------------
+
+
+@dataclass
+class AccountGroup:
+    """A pattern's categorised transactions in one account."""
+
+    account_key: int
+    category_key: int  # the most common category in this account
+    count: int
+    share: float
+    consistent: bool  # at least min_count transactions and min_share in one category
+    rule: Candidate | None = None  # the account rule that picks these out, if any
+    status: str = ""
+
+
+@dataclass
+class AccountDependence:
+    """A pattern whose category depends on the account."""
+
+    pattern: str
+    main_category: int  # the most common category over all accounts
+    count: int  # categorised transactions over all accounts
+    groups: list[AccountGroup]
+    examples: list[str]
 
 
 @dataclass
@@ -204,6 +297,30 @@ class MiningResult:
     suggested: list[Candidate]
     rejected: list[Candidate]
     merged_considered: int = 0
+    account_dependent: list[AccountDependence] = field(default_factory=list)
+
+
+def account_groups(items: Sequence[Item], params: MiningParams) -> list[AccountGroup]:
+    """Per account: the main category of these items, biggest account first."""
+    per: dict[int, Counter] = defaultdict(Counter)
+    for it in items:
+        if it.category:
+            per[it.account][it.category] += 1
+    out = []
+    for acc, counts in per.items():
+        n = sum(counts.values())
+        cat, top = counts.most_common(1)[0]
+        out.append(AccountGroup(acc, cat, n, top / n, n >= params.min_count and top / n >= params.min_share))
+    out.sort(key=lambda g: (-g.count, g.account_key))
+    return out
+
+
+def account_conflicts(cand: Candidate, by_idx: dict[int, Item],
+                      params: MiningParams) -> list[tuple[int, int, int]]:
+    """Accounts in which the candidate's matched transactions consistently have another category."""
+    groups = account_groups([by_idx[i] for i in cand.matched], params)
+    return [(g.account_key, g.category_key, g.count) for g in groups
+            if g.consistent and g.category_key != cand.category_key]
 
 
 def _measure(cand: Candidate, idxs: list[int], by_idx: dict[int, Item]) -> None:
@@ -304,6 +421,45 @@ def mine(items: Sequence[Item], matcher: Matcher, params: MiningParams,
         else:
             suggested.append(chosen)
 
+    # Patterns whose category depends on the account: look for account rules.
+    general = {c.pattern: c for c in suggested}
+    dependent: list[AccountDependence] = []
+    for p, counts in label_counts.items():
+        if sum(counts.values()) <= params.min_count:
+            continue
+        main = counts.most_common(1)[0][0]
+        acc_groups = account_groups(groups[p], params)
+        if not any(g.consistent and g.category_key != main for g in acc_groups):
+            continue
+        dependent.append(AccountDependence(p, main, sum(counts.values()), acc_groups,
+                                           list(dict.fromkeys(it.text for it in groups[p]))[:3]))
+        for g in acc_groups:
+            if not g.consistent:
+                g.status = "no consistent category in this account"
+                continue
+            gen = general.get(p)
+            if gen is not None and gen.category_key == g.category_key:
+                g.status = "the general rule for this description gives this category"
+                continue
+            cand = _account_rule(p, g, groups[p], indices, by_idx, params)
+            if cand is None:
+                g.status = "no rule text tells this account's transactions apart"
+                continue
+            g.rule = cand
+            status = duplicate_status(cand)
+            if any(c.key == cand.key for c in suggested):
+                cand.status = "same rule as another suggestion"
+            elif status:
+                cand.status = status
+            elif already_handled(cand):
+                cand.status = "existing rules already handle these"
+            if cand.status == "suggested":
+                g.status = "account rule suggested"
+                suggested.append(cand)
+            else:
+                g.status = cand.status
+                rejected.append(cand)
+
     merged_considered = 0
     if params.merge:
         rule_texts = {p: (opts[0][0] if opts else None) for p, opts in options.items()}
@@ -322,7 +478,30 @@ def mine(items: Sequence[Item], matcher: Matcher, params: MiningParams,
                     c.covered_by = m.text
                     break
         suggested += merged
-    return MiningResult(suggested, rejected, merged_considered)
+    for c in suggested:
+        c.account_conflicts = account_conflicts(c, by_idx, params)
+    return MiningResult(suggested, rejected, merged_considered, dependent)
+
+
+def _account_rule(pattern: str, group: AccountGroup, items: Sequence[Item], indices, by_idx,
+                  params: MiningParams) -> Candidate | None:
+    """A rule text that picks out one account's transactions of a pattern, if one exists.
+
+    Candidate texts come from that account's descriptions as written; each is measured
+    the HomeBank way over all transactions (every account), so it is only accepted
+    when it matches few enough of the other accounts' transactions.
+    """
+    texts = [it.text for it in items if it.account == group.account_key]
+    for text, coverage in raw_text_options(texts, params.min_text_length)[:12]:
+        cand = Candidate("account", text, group.category_key, pattern=pattern, pattern_count=group.count,
+                         pattern_share=group.share, account_key=group.account_key)
+        _measure(cand, indices(text), by_idx)
+        if cand.matches >= params.min_count and cand.precision >= params.min_share:
+            if coverage < 1.0:
+                cand.notes.append(f"matches {coverage:.0%} of this account's descriptions "
+                                  "(the others are written differently)")
+            return cand
+    return None
 
 
 def _merge(groups, label_counts, rule_texts, indices, by_idx, params, existing_texts):
@@ -371,8 +550,9 @@ def _merge(groups, label_counts, rule_texts, indices, by_idx, params, existing_t
 
 
 def evaluation_order(cands: Sequence[Candidate]) -> list[Candidate]:
-    """New rules: more specific (longer) texts first, so they win over general ones."""
-    return sorted(cands, key=lambda c: (-len(c.text), c.kind != "pattern", c.text))
+    """New rules: account rules first, then more specific (longer) texts, so they win
+    over general ones ("set category if empty": the first matching rule decides)."""
+    return sorted(cands, key=lambda c: (c.kind != "account", -len(c.text), c.kind != "pattern", c.text))
 
 
 # --- back-test ----------------------------------------------------------------------------------

@@ -109,7 +109,8 @@ def cmd_generate_sample(args: argparse.Namespace) -> int:
     if out.exists() and not args.overwrite:
         raise HbkitError("the output file already exists; choose another --output or add --overwrite")
     opts = GeneratorOptions(seed=args.seed, start_year=args.start_year, years=args.years,
-                            sentinel=args.sentinel, reporting=args.reporting)
+                            sentinel=args.sentinel, reporting=args.reporting,
+                            home_loans=args.home_loans)
     gen = generate(opts)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(gen.data)
@@ -322,6 +323,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--reporting", action="store_true",
                    help="add data for the reports (rental, medical, a business account) plus a sample CPI "
                         "table and settings file next to the sample")
+    p.add_argument("--home-loans", action="store_true",
+                   help="add two home loans whose transactions are categorised by account "
+                        "(to try account rules in rule mining)")
     p.add_argument("--sentinel", action="store_true", help=argparse.SUPPRESS)
     p.set_defaults(handler=cmd_generate_sample)
 

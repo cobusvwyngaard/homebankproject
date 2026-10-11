@@ -3,6 +3,7 @@
 import csv
 import difflib
 import json
+from collections import Counter
 
 from hbkit.xhb.reader import read_bytes
 
@@ -11,6 +12,7 @@ from .helpers import TempDirTestCase, run_cli, sample
 EXPECTED_FILES = {
     "README.txt", "review.csv", "rejected_candidates.csv", "backtest.csv", "backtest_by_category.csv",
     "existing_rules.csv", "overlaps.csv", "inconsistent_patterns.csv", "summary.json",
+    "rule_transactions.csv", "account_dependent.csv",
 }
 
 
@@ -41,6 +43,44 @@ class RuleMiningCommandTests(TempDirTestCase):
         self.assertIn("existing + new rules: correct", stdout)
         self.assertNotIn("Groceries", stdout)  # no names on screen by default
 
+    def test_rule_transactions(self):
+        _, folder, _, _ = self.mine()
+        review = self.read_csv(folder / "review.csv")
+        txns = self.read_csv(folder / "rule_transactions.csv")
+        per_rule = Counter(t["rule_id"] for t in txns)
+        results = Counter((t["rule_id"], t["result"]) for t in txns)
+        for r in review:
+            rid = r["rule_id"]
+            self.assertEqual(per_rule[rid], int(r["transactions_matched"]) + int(r["would_fill_uncategorised"]))
+            correct = results[(rid, "same category")]
+            self.assertAlmostEqual(100 * correct / int(r["transactions_matched"]), float(r["correct_pct"]),
+                                   delta=0.06)
+        woolworths = [t for t in txns if t["rule_text"] == "WOOLWORTHS"]
+        self.assertGreater(len(woolworths), 100)
+        self.assertTrue(all("WOOLWORTHS" in t["memo"].upper() for t in woolworths))
+        self.assertEqual([t["date"] for t in woolworths], sorted((t["date"] for t in woolworths), reverse=True))
+
+    def test_account_rules(self):
+        _, folder, stdout, _ = self.mine(home_loans=True)
+        review = self.read_csv(folder / "review.csv")
+        account = [r for r in review if r["kind"] == "account"]
+        self.assertEqual(sorted(r["for_account"] for r in account), ["Home loan A", "Home loan B"])
+        self.assertTrue(all("account rule" in r["notes"] for r in account))
+        dependent = self.read_csv(folder / "account_dependent.csv")
+        self.assertEqual(len(dependent), 4)  # two descriptions, two accounts each
+        outcomes = Counter((d["pattern"], d["outcome"]) for d in dependent)
+        self.assertEqual(outcomes[("HOME LOAN INTEREST", "no rule text tells this account's transactions apart")], 2)
+        self.assertEqual(outcomes[("BOND INSURANCE PREMIUM POLICY", "account rule suggested")], 2)
+        ids = {r["rule_id"] for r in account}
+        self.assertEqual({d["rule_id"] for d in dependent if d["rule_id"]}, ids)
+        inconsistent = {r["pattern"]: r["depends_on_account"] for r in self.read_csv(folder / "inconsistent_patterns.csv")}
+        self.assertEqual({p for p, yes in inconsistent.items() if yes == "yes"},
+                         {"HOME LOAN INTEREST", "BOND INSURANCE PREMIUM POLICY"})
+        self.assertIn("no", inconsistent.values())  # e.g. Takealot: mixed within one account
+        self.assertIn("Descriptions whose category depends on the account", stdout)
+        summary = json.loads((folder / "summary.json").read_text())
+        self.assertEqual((summary["account_rules"], summary["account_dependent_descriptions"]), (2, 2))
+
     def test_show_categories_is_explicit(self):
         _, _, stdout, _ = self.mine("--show-categories")
         self.assertIn("Groceries", stdout)
@@ -63,6 +103,11 @@ class RuleMiningCommandTests(TempDirTestCase):
         for line in (stdout + stderr).splitlines():
             if "ZQXSENT" in line:
                 self.assertIn("ZQXSENTCAT_", line)
+
+    def test_sentinel_file_with_account_rules(self):
+        _, folder, stdout, stderr = self.mine(sentinel=True, home_loans=True)
+        self.assertNoSentinel(stdout, stderr)
+        self.assertTrue(any(r["kind"] == "account" for r in self.read_csv(folder / "review.csv")))
 
 
 class ApplyRulesTests(TempDirTestCase):
@@ -116,6 +161,25 @@ class ApplyRulesTests(TempDirTestCase):
         new = sorted(book.rules, key=lambda r: r.pos)[-3:]
         self.assertEqual([len(r.search) for r in new], sorted((len(r.search) for r in new), reverse=True))
         self.assertIn("Rules added", stdout)
+
+    def test_account_rules_are_placed_first(self):
+        src = self.write_sample("loans.xhb", home_loans=True)
+        out = self.tmp / "out2"
+        code, _, err = run_cli("run", "rule-mining", "--file", str(src), "--out", str(out))
+        self.assertEqual(code, 0, err)
+        folder = next((out / "rule-mining").iterdir())
+        with open(folder / "review.csv", encoding="utf-8-sig", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        for r in rows:
+            r["approve"] = "y"
+        self.write_review(rows, "all.csv")
+        code, _, err = run_cli("apply-rules", "--review", str(self.folder / "all.csv"), "--file", str(src),
+                               "--out", str(out))
+        self.assertEqual(code, 0, err)
+        book = read_bytes(next(out.glob("with-rules_*.xhb")).read_bytes())
+        new = sorted(book.rules, key=lambda r: r.pos)[-len(rows):]
+        self.assertEqual({r.search for r in new[:2]},
+                         {"BOND INSURANCE PREMIUM POLICY 4410023", "BOND INSURANCE PREMIUM POLICY 4410078"})
 
     def test_excel_saved_review(self):
         rows = [dict(r) for r in self.rows]

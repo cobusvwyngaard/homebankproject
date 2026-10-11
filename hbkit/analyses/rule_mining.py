@@ -23,8 +23,8 @@ from ..errors import HbkitError
 from ..privacy import OUT_DIR, Summary, default_input, timestamp
 from ..rules.engine import Matcher, SimRule, existing_rules, simulate
 from ..rules.mining import (
-    NEW_RULE_FLAGS, SCENARIOS, Candidate, MiningParams, Outcome, backtest, build_items,
-    evaluation_order, find_overlaps, inconsistent_patterns, mine, score_existing,
+    NEW_RULE_FLAGS, SCENARIOS, AccountDependence, Candidate, Item, MiningParams, Outcome, backtest,
+    build_items, evaluation_order, find_overlaps, inconsistent_patterns, mine, score_existing,
 )
 from ..xhb import format as F
 from ..xhb.model import Book, Rule
@@ -46,6 +46,12 @@ review.csv                 Suggested rules. Put y in the "approve" column of the
                                python -m hbkit apply-rules --review "{folder}"
                            You may also edit rule_text or category (use the full category
                            name exactly as HomeBank shows it, e.g. Transport:Fuel).
+rule_transactions.csv      Every transaction each suggested rule matches, so you can check
+                           that the group belongs together. "result" says whether it has the
+                           rule's category, another one, or none yet (the rule would fill it).
+account_dependent.csv      Descriptions you categorise differently depending on the account
+                           (e.g. interest on two home loans for two properties), per account,
+                           with the account rule suggested for it or why there is none.
 rejected_candidates.csv    Patterns that were consistent enough but did not become
                            suggestions, with the reason.
 backtest.csv               How well rules built from the older years categorise the latest
@@ -61,6 +67,9 @@ summary.json               Settings and totals of this run.
 Notes
 - Suggested rules are "contains" rules, ignoring case, on the {field} field, that set the
   category only when it is empty.
+- HomeBank rules cannot be limited to one account. An "account" rule works because its
+  text (often a policy or loan number) only appears in that account's descriptions.
+  Where the descriptions are identical in both accounts, no rule can tell them apart.
 - Your existing rules may have set many of the categories in the first place, which makes
   them look better in the back-test than they really are.
 """
@@ -113,12 +122,24 @@ class RuleMining(Analysis):
         for i, c in enumerate(suggested, start=1):
             c.id = f"N{i:04d}"
         by_text = {c.text: c.id for c in suggested}
+        account_rules = {(c.account_key, c.category_key): c.id for c in suggested if c.kind == "account"}
         for c in suggested:
             c.covered_by = by_text.get(c.covered_by, c.covered_by)
             if c.covered_by:
                 c.notes.append(f"also covered by merged rule {c.covered_by} (same category)")
             if len(c.text) < 8 or " " not in c.text:
                 c.notes.append("short rule text: check it cannot match other things")
+            if c.kind == "account":
+                c.notes.append(f"account rule: this text only appears in the descriptions of "
+                               f"{book.account_name(c.account_key) or 'one account'}; it is placed "
+                               "before the general rules")
+            for acc, other, n in c.account_conflicts:
+                where = f"in {book.account_name(acc) or 'another account'} these are usually " \
+                        f"{book.category_path(other) or 'another category'} ({n})"
+                handled = account_rules.get((acc, other))
+                c.notes.append(f"{where}: handled by account rule {handled} if you approve it" if handled else
+                               f"{where}: no rule text tells them apart, so this rule would give them "
+                               "this category too")
 
         scores = score_existing(book, items, matcher, mp, existing, bt.test_years[0] if bt else None)
         new_rules = [c.sim_rule(mp.field) for c in evaluation_order(suggested)]
@@ -133,7 +154,14 @@ class RuleMining(Analysis):
         labelled = [it for it in items if it.category]
 
         self._write(folder, book, mp, suggested, result.rejected, bt, scores, overlaps, inconsistent,
-                    conflicts, existing_sim.category, params)
+                    conflicts, existing_sim.category, params,
+                    frozenset(d.pattern for d in result.account_dependent))
+        self._write_accounts(folder, book, result.account_dependent)
+        lookup = RuleMatches(book, items, matcher, mp.field)
+        write_csv(folder / "rule_transactions.csv", ["rule_id", "rule_text", "rule_category", *MATCH_HEADER], (
+            [c.id, c.text, book.category_path(c.category_key), *row]
+            for c in suggested for row in lookup.rows(c.text, c.category_key)
+        ))
         write_json(folder / "summary.json", {
             "toolkit_version": __version__,
             "created": datetime.now().isoformat(timespec="seconds"),
@@ -143,6 +171,8 @@ class RuleMining(Analysis):
             "categorised": len(labelled),
             "excluded": dict(excluded),
             "suggested": len(suggested),
+            "account_rules": sum(1 for c in suggested if c.kind == "account"),
+            "account_dependent_descriptions": len(result.account_dependent),
             "rejected": len(result.rejected),
             "backtest": None if bt is None else {
                 "train_years": bt.train_years, "test_years": bt.test_years,
@@ -160,7 +190,7 @@ class RuleMining(Analysis):
 
     def _write(self, folder: Path, book: Book, mp: MiningParams, suggested: list[Candidate],
                rejected: list[Candidate], bt, scores, overlaps, inconsistent, conflicts, existing_pred,
-               params) -> None:
+               params, account_patterns: frozenset[str] = frozenset()) -> None:
         cat = book.category_path
         field_name = params["field"]
 
@@ -174,15 +204,19 @@ class RuleMining(Analysis):
             return ["tested", n, pct(correct, n) if n else ""]
 
         write_csv(folder / "review.csv", [
-            "approve", "rule_id", "rule_text", "category", "kind", "transactions_matched", "correct_pct",
-            "would_fill_uncategorised", "backtest", "backtest_matched", "backtest_correct_pct",
-            "patterns_covered", "covered_by", "conflicts_with_existing_rules",
+            "approve", "rule_id", "rule_text", "category", "kind", "for_account", "transactions_matched",
+            "correct_pct", "would_fill_uncategorised", "backtest", "backtest_matched", "backtest_correct_pct",
+            "patterns_covered", "covered_by", "conflicts_with_existing_rules", "other_accounts_differ",
             "existing_rules_already_right_pct", "first_seen", "last_seen", "notes", "examples", "pattern",
             "field", "category_key",
         ], (
-            ["", c.id, c.text, cat(c.category_key), c.kind, c.matches, pct(c.correct, c.matches),
+            ["", c.id, c.text, cat(c.category_key), c.kind,
+             (book.account_name(c.account_key) or "") if c.kind == "account" else "",
+             c.matches, pct(c.correct, c.matches),
              c.would_fill, *backtest_cols(c), c.patterns_covered, c.covered_by,
-             "; ".join(conflicts.get(c.id, [])), self._right_pct(c, existing_pred),
+             "; ".join(conflicts.get(c.id, [])),
+             "; ".join(f"{book.account_name(a) or '?'}: {n} in {cat(k) or '?'}" for a, k, n in c.account_conflicts),
+             self._right_pct(c, existing_pred),
              c.first_seen, c.last_seen, "; ".join(c.notes), " | ".join(c.examples), c.pattern,
              field_name, c.category_key]
             for c in suggested
@@ -242,13 +276,29 @@ class RuleMining(Analysis):
         ))
         write_csv(folder / "inconsistent_patterns.csv", [
             "pattern", "transactions", "categories", "main_category", "main_share_pct",
-            "main_category_latest_year", "changed_over_time", "first_seen", "last_seen", "examples",
+            "main_category_latest_year", "changed_over_time", "depends_on_account", "first_seen", "last_seen",
+            "examples",
         ], (
             [x.pattern, x.total,
              " | ".join(f"{cat(k)} {pct(n, x.total)}% ({n})" for k, n in x.counts.most_common()),
              cat(x.top[0]), pct(x.top[1], x.total), cat(x.recent_top), _yn(x.recent_top != x.top[0]),
-             x.first_seen, x.last_seen, " | ".join(x.examples)]
+             _yn(x.pattern in account_patterns), x.first_seen, x.last_seen, " | ".join(x.examples)]
             for x in inconsistent
+        ))
+
+    @staticmethod
+    def _write_accounts(folder: Path, book: Book, dependent: list[AccountDependence]) -> None:
+        cat = book.category_path
+        write_csv(folder / "account_dependent.csv", [
+            "pattern", "account", "transactions", "category_in_this_account", "share_pct",
+            "consistent", "outcome", "rule_id", "rule_text", "main_category_all_accounts",
+            "transactions_all_accounts", "examples",
+        ], (
+            [d.pattern, book.account_name(g.account_key) or "", g.count, cat(g.category_key),
+             round(100 * g.share, 1), _yn(g.consistent), g.status,
+             g.rule.id if g.rule else "", g.rule.text if g.rule else "", cat(d.main_category), d.count,
+             " | ".join(d.examples)]
+            for d in dependent for g in d.groups
         ))
 
     @staticmethod
@@ -298,6 +348,8 @@ class RuleMining(Analysis):
         s.count("Suggested rules", len(suggested))
         s.count("  from one description pattern", sum(1 for c in suggested if c.kind == "pattern"))
         s.count("  merged (merchant level)", sum(1 for c in suggested if c.kind == "merged"))
+        s.count("  account rules (text found only in one account's descriptions)",
+                sum(1 for c in suggested if c.kind == "account"))
         s.count("  that would also fill uncategorised transactions", sum(1 for c in suggested if c.would_fill))
         statuses = Counter(c.status.split(" (")[0].split(",")[0] for c in result.rejected)
         s.count("Set aside (see rejected_candidates.csv)", len(result.rejected))
@@ -305,6 +357,13 @@ class RuleMining(Analysis):
             s.count(f"  {status}", n)
         s.heading("Checks")
         s.count("Inconsistently categorised patterns", len(inconsistent))
+        groups = [g for d in result.account_dependent for g in d.groups if g.consistent]
+        s.count("Descriptions whose category depends on the account", len(result.account_dependent))
+        s.count("  accounts with an account rule", sum(1 for g in groups if g.rule is not None))
+        s.count("  accounts no rule text can tell apart",
+                sum(1 for g in groups if g.status == "no rule text tells this account's transactions apart"))
+        s.count("Suggested rules that another account contradicts",
+                sum(1 for c in suggested if c.account_conflicts))
         s.count("Overlapping rule pairs", len(overlaps))
         s.count("  with different categories", sum(1 for o in overlaps if o.different_categories))
         s.count("Existing rules", len(scores))
@@ -320,6 +379,52 @@ class RuleMining(Analysis):
 
 def _yn(flag: Any) -> str:
     return "yes" if flag else "no"
+
+
+# --- the transactions a rule text matches -----------------------------------------------------------
+
+MATCH_HEADER = ["date", "account", "memo", "payee", "category", "amount", "result"]
+RESULT_SAME, RESULT_OTHER, RESULT_FILL = "same category", "other category", "no category: would be filled"
+
+
+class RuleMatches:
+    """Lists the transactions a rule text matches, the way HomeBank would match it.
+
+    Used for rule_transactions.csv and by the browser interface, which can also try an
+    edited rule text. Only the transactions rule mining considers are listed (not void,
+    split or, unless asked, internal transfers).
+    """
+
+    def __init__(self, book: Book, items: list[Item], matcher: Matcher, field_: int):
+        self.book = book
+        self.by_idx = {it.idx: it for it in items}
+        self.matcher = matcher
+        self.field = field_
+
+    @classmethod
+    def for_book(cls, book: Book, field_name: str = "memo", include_transfers: bool = False) -> RuleMatches:
+        mp = MiningParams(field=FIELDS.get(field_name, F.RULE_FIELD_MEMO), include_transfers=include_transfers)
+        items, view, _ = build_items(book, mp)
+        return cls(book, items, Matcher(view), mp.field)
+
+    def rows(self, text: str, category_key: int = 0) -> list[list]:
+        """One row per matched transaction (MATCH_HEADER), newest first."""
+        if not text.strip():
+            return []
+        rule = SimRule(id=text, search=text, flags=NEW_RULE_FLAGS, match_field=self.field)
+        book = self.book
+        out = []
+        for i in self.matcher.indices(rule):
+            it = self.by_idx.get(i)
+            if it is None:
+                continue
+            t = it.txn
+            result = RESULT_FILL if not it.category else RESULT_SAME if it.category == category_key else RESULT_OTHER
+            payee = book.payees[t.payee_key].name if t.payee_key in book.payees else ""
+            out.append([it.date.isoformat(), book.account_name(t.account_key) or "", t.memo, payee,
+                        book.category_path(it.category) or "", t.amount, result])
+        out.sort(key=lambda r: r[0], reverse=True)
+        return out
 
 
 def _action(rule: SimRule) -> str:
@@ -381,7 +486,7 @@ def apply_review_rows(rows: list[dict[str, str]], book: Book, input_path: Path, 
     editor = XhbEditor(book)
     existing = {(r.match_field, r.search.casefold()) for r in book.rules}
     skipped: Counter = Counter()
-    chosen: list[Rule] = []
+    chosen: list[tuple[bool, Rule]] = []  # (account rule?, rule)
     seen: set[tuple[int, str]] = set()
     approved = [r for r in rows if r.get("approve", "").strip().lower() in APPROVED]
     for row in approved:
@@ -401,7 +506,8 @@ def apply_review_rows(rows: list[dict[str, str]], book: Book, input_path: Path, 
             skipped["approved twice"] += 1
         else:
             seen.add(key)
-            chosen.append(Rule(flags=NEW_RULE_FLAGS, match_field=field_, search=text, category_key=cat.key))
+            chosen.append((row.get("kind", "").strip().lower() == "account",
+                           Rule(flags=NEW_RULE_FLAGS, match_field=field_, search=text, category_key=cat.key)))
 
     s = Summary("Apply approved rules")
     s.count("Rows in the review file", len(rows))
@@ -412,8 +518,9 @@ def apply_review_rows(rows: list[dict[str, str]], book: Book, input_path: Path, 
         s.note("No rules to add, so no file was written.")
         return s, None
 
-    # More specific (longer) texts first, so they are applied before general ones.
-    for rule in sorted(chosen, key=lambda r: -len(r.search)):
+    # Account rules first, then more specific (longer) texts, so they are applied before
+    # general ones (as in evaluation_order).
+    for _, rule in sorted(chosen, key=lambda ar: (not ar[0], -len(ar[1].search))):
         editor.add_rule(rule)
     result = editor.save(output, input_path=input_path)
     s.count("Rules added", result.inserted)
