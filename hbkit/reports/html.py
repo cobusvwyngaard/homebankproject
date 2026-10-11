@@ -47,7 +47,8 @@ tr.highlight td { background: #fff3df; }
 footer { color: %(muted)s; font-size: 12px; text-align: center; padding: 20px; }
 details > summary { cursor: pointer; color: %(text2)s; }
 @media print {
-  body { background: #fff; font-size: 11pt; }
+  body { background: #fff; font-size: 10pt; }
+  table { font-size: 9pt; }
   main { max-width: none; padding: 0; }
   .card { border: 0; padding: 0; }
   .noprint, .toggle { display: none !important; }

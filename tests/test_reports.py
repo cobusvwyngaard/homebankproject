@@ -92,7 +92,7 @@ class CommonTests(ReportTestCase):
                 self.assertNoSentinel(out, err)  # the terminal never shows file text
                 self.assertNotRegex(page, r"<script[^>]+src=")  # nothing loaded from elsewhere
                 self.assertNotRegex(page, r"<link[^>]+href=\"?https?:")
-                self.assertIn("Plotly", page) if discover()[name].period_kind == "range" else None
+                self.assertEqual("Plotly" in page, discover()[name].needs_charts)
                 text = text_of(page)
                 for label in ("Report", "Year mode", "Data range", "Generated", "Settings", "HomeBank file"):
                     self.assertIn(label, text)
@@ -255,3 +255,87 @@ class CategoryTrendsTests(ReportTestCase):
         self.assertEqual(average_growth({3: 121}, 1, 3), (None, "new"))
         self.assertEqual(average_growth({1: 100}, 1, 3), (None, "stopped"))
         self.assertEqual(average_growth({1: 100, 3: 121}, None, None), (None, ""))
+
+
+TAX_SETTINGS = Settings(
+    year_mode="calendar",  # the statement always uses tax years, whatever the settings say
+    exclude_accounts=["Business"],
+    groups=[Group("tax: home", categories=["Household"]), Group("tax: prop", tags=["propA"]),
+            Group("groceries", categories=["Groceries"])],
+)
+
+
+@needs_plotly
+class TaxYearStatementTests(ReportTestCase):
+    def csv_rows(self):
+        import csv
+
+        path = sorted((self.out / "reports").glob("tax-year-statement_*.csv"))[-1]
+        with open(path, encoding="utf-8-sig", newline="") as fh:
+            return list(csv.DictReader(fh))
+
+    def test_hand_checked_default_year(self):
+        page, summary = self.run_mini("tax-year-statement", TAX_SETTINGS)
+        text = text_of(page)
+        # The file ends on 8 March 2025, so the latest finished tax year is 2024/25.
+        self.assertIn("Tax year 2024/25", text)
+        self.assertIn("SA tax year", text)
+        # 2024/25: only the split line "soap" (Household:Cleaning, -50) is in a tax group.
+        rows = self.csv_rows()
+        lines = [(r["group"], r["memo"], float(r["amount"])) for r in rows if r["row_type"] == "line"]
+        self.assertEqual(lines, [("tax: home", "soap", -50.0)])
+        net = {r["group"]: float(r["amount"]) for r in rows if r["row_type"] == "subtotal: net"}
+        self.assertEqual(net, {"tax: home": -50.0, "tax: prop": 0.0})
+        self.assertNotIn("groceries", {r["group"] for r in rows})  # not a "tax:" group
+
+    def test_hand_checked_line_in_two_groups(self):
+        page, _ = self.run_mini("tax-year-statement", TAX_SETTINGS, year=2026)
+        text = text_of(page)
+        self.assertIn("not complete yet", text)  # 2025/26 runs to February 2026
+        self.assertIn("1 line(s) belong to more than one group", text)
+        lines = [(r["group"], r["memo"]) for r in self.csv_rows() if r["row_type"] == "line"]
+        self.assertEqual(lines, [("tax: home", "k household tagged"), ("tax: prop", "k household tagged")])
+
+    def test_groups_option(self):
+        report = discover()["tax-year-statement"]
+        path = self.tmp / "mini.xhb"
+        path.write_bytes(MINI)
+        params = {"groups": "Groceries"}
+        run_report(report, read_file(path), path, TAX_SETTINGS, self.out, params, year=2025)
+        lines = [(r["group"], float(r["amount"])) for r in self.csv_rows() if r["row_type"] == "line"]
+        self.assertEqual(lines, [("groceries", -200.0), ("groceries", -100.0)])
+        with self.assertRaises(Exception):
+            run_report(report, read_file(path), path, TAX_SETTINGS, self.out, {"groups": "nope"}, year=2025)
+
+    def test_no_tax_groups(self):
+        page, _ = self.run_mini("tax-year-statement", Settings(year_mode="tax"))
+        self.assertIn("No tax groups are set up", text_of(page))
+
+    def test_generated_file_totals(self):
+        page, out, _ = self.cli("tax-year-statement", "--year", "2025")
+        book = read_bytes(sample(reporting=True).data)
+        expected = 0.0
+        for t in book.transactions:
+            if t.is_void or t.is_internal_transfer or not date(2024, 3, 1) <= t.date <= date(2025, 2, 28):
+                continue
+            cat_path = book.category_path(t.category_key) or ""
+            if cat_path.startswith("Rental A") or "propA" in t.tags:
+                expected += t.amount
+        net = {r["group"]: float(r["amount"]) for r in self.csv_rows() if r["row_type"] == "subtotal: net"}
+        self.assertAlmostEqual(net["tax: rental – property A"], expected, places=2)
+        self.assertIn(money(expected), text_of(page))
+        self.assertIn("CSV", out)
+
+    def test_printable(self):
+        page, _, _ = self.cli("tax-year-statement")
+        self.assertIn("@page { size: A4", page)
+        self.assertIn('class="pagebreak"', page)
+        self.assertIn("window.print()", page)
+        self.assertLess(len(page), 500_000)  # no chart library needed
+
+    def test_range_options_are_refused(self):
+        # one tax year only: --from/--to are not options of this report
+        with self.assertRaises(SystemExit) as cm:
+            run_cli("report", "run", "tax-year-statement", "--file", str(self.src), "--settings",
+                    str(self.settings_path), "--out", str(self.out), "--from", "2024")
+        self.assertEqual(cm.exception.code, 2)

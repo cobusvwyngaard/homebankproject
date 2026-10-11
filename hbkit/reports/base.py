@@ -75,6 +75,10 @@ class Report:
     description: str = ""
     #: "range": --from/--to (or --year for one); "single": exactly one period.
     period_kind: str = "range"
+    #: Set to "tax" or "calendar" to use that year mode whatever the settings say.
+    year_mode: str | None = None
+    #: False for reports without charts (the chart library is then not embedded).
+    needs_charts: bool = True
     params: tuple[Param, ...] = ()
 
     def build(self, ctx: ReportContext, params: dict[str, Any]) -> ReportOutput:
@@ -109,9 +113,14 @@ def choose_periods(kind: str, all_periods: list[int], last_date: date, mode: str
 def run_report(report: Report, book: Book, input_path: Path, settings: Settings, out_root: Path,
                params: dict[str, Any], year: int | None = None, start: int | None = None,
                end: int | None = None) -> tuple[Summary, Path]:
+    from dataclasses import replace
+
     from .html import page, require_plotly
 
-    require_plotly()
+    if report.needs_charts:
+        require_plotly()
+    if report.year_mode and report.year_mode != settings.year_mode:
+        settings = replace(settings, year_mode=report.year_mode)
     data = build_report_data(book, settings)
     try:
         conn = data.conn
@@ -131,8 +140,9 @@ def run_report(report: Report, book: Book, input_path: Path, settings: Settings,
             ("Report", report.name),
             ("Years", chosen),
             ("Year mode", mode_text),
-            *[(p.name.replace("_", " ").capitalize(),
-               f"{params[p.name]:g}" if isinstance(params[p.name], float) else str(params[p.name]))
+            *[(p.name.replace("_", " ").capitalize() + " option",
+               f"{params[p.name]:g}" if isinstance(params[p.name], float)
+               else (str(params[p.name]) if params[p.name] != "" else "(not given)"))
               for p in report.params],
             ("Data range", f"{first_date:%d %b %Y} – {last_date:%d %b %Y} (all transactions in the file)"),
             ("Excluded accounts", ", ".join(data.excluded_accounts) or "none"),
