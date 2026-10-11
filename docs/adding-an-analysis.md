@@ -1,8 +1,9 @@
 # Adding an analysis
 
 An analysis is **one module in `hbkit/analyses/` plus its tests**. It is found
-automatically, appears in `python -m hbkit list`, and runs with
-`python -m hbkit run <name>`.
+automatically, appears in `python -m hbkit list` and on the *Analyse* page of the
+browser interface (with a form for its parameters), runs with
+`python -m hbkit run <name>`, and its CSV files can be browsed on the *Results* page.
 
 ## The interface (`hbkit/analyses/base.py`)
 
@@ -47,7 +48,8 @@ ANALYSIS = CategoryTrends()
 1. **Never print.** Return a `Summary`. It only accepts numbers (`count`, `percent`,
    `number`), fixed labels written in the code, notes written in the code, and
    output paths. Never put file text (memos, names, rule texts) in a label or note.
-2. Write details with `write_csv` / `write_json` into `ctx.new_run_dir()`.
+2. Write details with `write_csv` / `write_json` into `ctx.new_run_dir()`. Use
+   `summary.note(..., terminal_only=True)` for hints that only make sense in PowerShell.
 3. Raise `hbkit.errors.HbkitError` with a message that contains no file values for
    expected problems. Anything else is caught and written to a log file in
    `data/out/errors/`.

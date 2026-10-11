@@ -85,6 +85,30 @@ def cmd_generate_sample(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ui(args: argparse.Namespace) -> int:
+    import webbrowser
+
+    from .ui.server import UiState, make_server
+
+    state = UiState(out_root=Path(args.out), input_path=Path(args.file) if args.file else None)
+    server = make_server(state, args.port)
+    term = Terminal()
+    term.line("The HomeBank toolkit is running in your browser at:")
+    term.line(f"  {server.url}")
+    term.line("If the browser does not open by itself, copy that address into it.")
+    term.line("It only works on this computer. Keep this window open; press Ctrl+C here to stop.")
+    if not args.no_browser:
+        webbrowser.open(server.url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    term.line("Stopped.")
+    return 0
+
+
 def cmd_list(args: argparse.Namespace) -> int:
     from .analyses import discover
 
@@ -148,6 +172,13 @@ def build_parser() -> argparse.ArgumentParser:
     from .analyses import discover
 
     analyses = discover()
+
+    p = sub.add_parser("ui", help="open the browser interface (runs only on this computer)")
+    _add_file_option(p)
+    _add_out_option(p)
+    p.add_argument("--port", type=int, default=0, help="port number (default: any free port)")
+    p.add_argument("--no-browser", action="store_true", help="do not open the browser automatically")
+    p.set_defaults(handler=cmd_ui)
 
     p = sub.add_parser("list", help="list the available analyses")
     p.set_defaults(handler=cmd_list)

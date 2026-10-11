@@ -10,6 +10,7 @@ A small program that runs on your own computer and analyses your HomeBank file
 * add the rules you approve to a **new copy** of your file. Your original file is
   never changed.
 
+You can use it in your **web browser** (easiest) or by typing commands in PowerShell.
 It needs only Python; nothing else is installed.
 
 ---
@@ -17,7 +18,11 @@ It needs only Python; nothing else is installed.
 ## Your privacy
 
 * Everything runs on your computer. Nothing is sent anywhere.
-* **On screen you only see counts and percentages** — never memos, payee, category
+* **The browser interface shows your own data** (memos, categories, rules) so that you
+  can review rules. It is served by the toolkit itself, only to your own computer
+  (address `127.0.0.1`), protected by a secret key that changes every time it starts, and
+  it loads nothing from the internet.
+* **In PowerShell you only see counts and percentages** — never memos, payee, category
   or account names, or amounts. (One exception you have to ask for: the option
   `--show-categories` of rule mining shows your category names.)
 * **Detailed results go into the `data\out` folder**, as CSV files you can open in Excel.
@@ -92,6 +97,41 @@ When you have made new entries in HomeBank, copy the file again before running a
 
 ---
 
+## The browser interface (easiest)
+
+**Double-click `hb-ui.cmd`** in the project folder, or run this in PowerShell from the
+project folder:
+
+```powershell
+.\hb ui
+```
+
+Your browser then shows the toolkit. The black window (or your PowerShell window) must
+stay open while you use it — it *is* the toolkit. If the browser does not open by itself,
+copy the address shown in that window (`http://127.0.0.1:…/#token=…`) into it. To stop,
+close the window or press Ctrl+C in it.
+
+The pages, from left to right:
+
+1. **File** — choose your HomeBank file (the one in the `data` folder is chosen for you)
+   and check that the toolkit understands it.
+2. **Analyse** — run an analysis, change its options under *Options*, and see the summary.
+3. **Rule review** — the suggested rules in a table. Tick the ones you want, change the
+   text or category if you like (the category box suggests your categories as you type),
+   filter and sort, then click **Add approved rules to a new copy…**. *Save approvals*
+   keeps your ticks for later. Other tabs show your existing rules with their scores,
+   inconsistent descriptions, overlapping rules, the back-test and the suggestions that
+   were set aside.
+4. **Results** — every result file of every run, as sortable tables.
+5. **Export** — create the SQLite database.
+
+*Show folder* buttons open the results folder in Windows Explorer.
+
+The browser interface and the commands below do exactly the same work and write to
+the same `data\out` folder, so you can mix them.
+
+---
+
 ## Running commands
 
 All commands are run from the project folder in PowerShell, using the launcher `hb`:
@@ -133,6 +173,12 @@ Creates `data\out\homebank.sqlite` (each export replaces the previous one). Open
 without admin rights). Start with the views `v_transactions`, `v_transaction_lines`
 (splits expanded) and `v_monthly_category_totals`. The full description, with example
 queries, is in [docs/sqlite-schema.md](docs/sqlite-schema.md).
+
+### `ui` — the browser interface
+
+```powershell
+.\hb ui                    # options: --file, --out, --port N, --no-browser
+```
 
 ### `list` and `run` — analyses
 
@@ -220,6 +266,9 @@ Useful columns in `review.csv`:
 
 ### Approving rules and adding them to a copy of your file
 
+The easiest way is the **Rule review** page of the browser interface (see above). Without
+it:
+
 1. Open `review.csv` in Excel. If everything appears in one column, use
    *Data → From Text/CSV* and choose *comma* as the delimiter.
 2. Type `y` in the **approve** column of each rule you want. You may also change
@@ -281,6 +330,8 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 | `Unexpected error (…)` | The details were written to `data\out\errors\`. They may contain text from your file, so do not paste them anywhere. Tell Claude the error type and what you ran instead. |
 | `py` is not recognised | Python is not installed, or was installed without the launcher; reinstall Python 3.13 as above. |
 | `.\hb` does nothing / `.venv` missing | Do step 3 of the set-up again. |
+| The browser says "missing or wrong key" | Use the full address shown in the black window (it ends in `#token=…`); the key changes each time the toolkit starts. |
+| The browser page stops responding | The black window was closed. Start `hb-ui.cmd` again. |
 
 ---
 

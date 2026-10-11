@@ -55,8 +55,9 @@ class Summary:
     def heading(self, text: str) -> None:
         self.rows.append(_Row("heading", text))
 
-    def note(self, text: str) -> None:
-        self.rows.append(_Row("note", text))
+    def note(self, text: str, terminal_only: bool = False) -> None:
+        """Fixed explanatory text. `terminal_only` notes (command hints) are left out of the browser."""
+        self.rows.append(_Row("note", text, extra=terminal_only))
 
     def count(self, label: str, value: int) -> None:
         if isinstance(value, bool) or not isinstance(value, int):
@@ -78,6 +79,22 @@ class Summary:
         """Where detailed output was written (shown relative to the project folder)."""
         self.rows.append(_Row("output", label, Path(path)))
 
+    @staticmethod
+    def _value_text(r: _Row) -> str:
+        if r.kind == "count":
+            return f"{r.value:,}".replace(",", " ")
+        if r.kind == "number":
+            decimals, unit = r.extra
+            return f"{r.value:.{decimals}f}{(' ' + unit) if unit else ''}"
+        if r.kind == "percent":
+            part, whole = r.value, r.extra
+            pct = (100.0 * part / whole) if whole else 0.0
+            counts = f"{part:,} of {whole:,}".replace(",", " ") if isinstance(part, int) else ""
+            return f"{pct:.1f}%  {counts}".rstrip()
+        if r.kind == "output":
+            return display_path(r.value)
+        return ""
+
     def render(self) -> list[str]:
         out = [self.title, "=" * len(self.title)]
         width = max([len(r.label) for r in self.rows if r.kind not in ("heading", "note")] + [10])
@@ -86,19 +103,28 @@ class Summary:
                 out += ["", r.label]
             elif r.kind == "note":
                 out.append(f"  {r.label}")
-            elif r.kind == "count":
-                out.append(f"  {r.label:<{width}}  {r.value:>10,}".replace(",", " "))
-            elif r.kind == "number":
-                decimals, unit = r.extra
-                out.append(f"  {r.label:<{width}}  {r.value:>10.{decimals}f}{(' ' + unit) if unit else ''}")
             elif r.kind == "percent":
-                part, whole = r.value, r.extra
-                pct = (100.0 * part / whole) if whole else 0.0
-                counts = f"{part:,} of {whole:,}".replace(",", " ") if isinstance(part, int) else ""
-                out.append(f"  {r.label:<{width}}  {pct:>9.1f}%  {counts}".rstrip())
+                pct, _, counts = self._value_text(r).partition("  ")
+                out.append(f"  {r.label:<{width}}  {pct:>10}  {counts}".rstrip())
             elif r.kind == "output":
-                out.append(f"  {r.label:<{width}}  {display_path(r.value)}")
+                out.append(f"  {r.label:<{width}}  {self._value_text(r)}")
+            else:
+                out.append(f"  {r.label:<{width}}  {self._value_text(r):>10}")
         return out
+
+    def to_dict(self) -> dict:
+        """The summary as data, for the browser interface."""
+        rows = []
+        for r in self.rows:
+            if r.kind == "note" and r.extra:
+                continue
+            row = {"kind": r.kind, "label": r.label, "text": self._value_text(r)}
+            if r.kind == "percent":
+                row["percent"] = round(100.0 * r.value / r.extra, 1) if r.extra else 0.0
+            elif r.kind == "output":
+                row["path"] = str(Path(r.value).resolve())
+            rows.append(row)
+        return {"title": self.title, "rows": rows}
 
 
 class Terminal:

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en-ZA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HomeBank toolkit</title>
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">HomeBank toolkit</div>
+    <nav id="nav" aria-label="Sections">
+      <button type="button" data-view="file">1. File</button>
+      <button type="button" data-view="analyse">2. Analyse</button>
+      <button type="button" data-view="review">3. Rule review</button>
+      <button type="button" data-view="results">Results</button>
+      <button type="button" data-view="export">Export</button>
+    </nav>
+    <div id="current-file" class="current-file"></div>
+  </header>
+  <main id="main"><p class="muted">Loading…</p></main>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <footer>Runs only on this computer &middot; nothing is sent anywhere &middot; <span id="version"></span></footer>
+</body>
+</html>

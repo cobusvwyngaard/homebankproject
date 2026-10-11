@@ -312,8 +312,9 @@ class RuleMining(Analysis):
             s.count(f"  {status}", n)
         s.heading("Output")
         s.output("Folder", folder)
-        s.note("Next: open review.csv, put y in the approve column, save, then run")
-        s.note("python -m hbkit apply-rules --review <that folder>")
+        s.note("Next: open review.csv, put y in the approve column, save, then run", terminal_only=True)
+        s.note("python -m hbkit apply-rules --review <that folder>", terminal_only=True)
+        s.note("(or use the browser interface: python -m hbkit ui)", terminal_only=True)
         return s
 
 
@@ -363,25 +364,29 @@ def read_review(path: Path) -> list[dict[str, str]]:
     return [{k: (v or "").strip() for k, v in row.items() if k} for row in reader]
 
 
-def apply_rules(args: argparse.Namespace) -> tuple[Summary, Book]:
-    review = Path(args.review)
-    if review.is_dir():
-        review = review / "review.csv"
-    if not review.is_file():
-        raise HbkitError("the review file was not found (give review.csv or the folder that contains it)")
-    rows = read_review(review)
-    input_path = Path(args.file) if args.file else default_input()
-    book = read_file(input_path)
-    editor = XhbEditor(book)
+def default_output(out_root: Path) -> Path:
+    """data/out/with-rules_<date_time>.xhb, never an existing file."""
+    stem = f"with-rules_{timestamp()}"
+    output = Path(out_root) / f"{stem}.xhb"
+    n = 2
+    while output.exists():
+        output = Path(out_root) / f"{stem}_{n}.xhb"
+        n += 1
+    return output
 
+
+def apply_review_rows(rows: list[dict[str, str]], book: Book, input_path: Path, output: Path,
+                      review_folder: Path | None = None) -> tuple[Summary, Path | None]:
+    """Add the approved rows as rules to a new copy of the file. Used by the command and the browser."""
+    editor = XhbEditor(book)
     existing = {(r.match_field, r.search.casefold()) for r in book.rules}
     skipped: Counter = Counter()
     chosen: list[Rule] = []
     seen: set[tuple[int, str]] = set()
     approved = [r for r in rows if r.get("approve", "").strip().lower() in APPROVED]
     for row in approved:
-        text = row.get("rule_text", "")
-        field_ = FIELDS.get(row.get("field", "memo").lower() or "memo")
+        text = row.get("rule_text", "").strip()
+        field_ = FIELDS.get((row.get("field") or "memo").strip().lower())
         cat = book.category_by_path(row.get("category", ""))
         key = (field_, text.casefold())
         if not text:
@@ -405,26 +410,17 @@ def apply_rules(args: argparse.Namespace) -> tuple[Summary, Book]:
         s.count(f"Skipped: {reason}", n)
     if not chosen:
         s.note("No rules to add, so no file was written.")
-        return s, book
+        return s, None
 
     # More specific (longer) texts first, so they are applied before general ones.
     for rule in sorted(chosen, key=lambda r: -len(r.search)):
         editor.add_rule(rule)
-    if args.output:
-        output = Path(args.output)
-    else:
-        stem = f"with-rules_{timestamp()}"
-        output = Path(args.out) / f"{stem}.xhb"
-        n = 2
-        while output.exists():
-            output = Path(args.out) / f"{stem}_{n}.xhb"
-            n += 1
     result = editor.save(output, input_path=input_path)
     s.count("Rules added", result.inserted)
     s.output("New copy", result.path)
 
-    meta = review.parent / "summary.json"
-    if meta.is_file():
+    meta = review_folder / "summary.json" if review_folder else None
+    if meta is not None and meta.is_file():
         try:
             source = json.loads(meta.read_text(encoding="utf-8")).get("source_sha256")
         except (ValueError, OSError):
@@ -434,7 +430,21 @@ def apply_rules(args: argparse.Namespace) -> tuple[Summary, Book]:
             s.note("categories were matched by name, so check the new rules in HomeBank.")
     s.note("Your original file was not changed. Open the new copy in HomeBank, check the")
     s.note("rules under Manage > Assignments, and use the copy once you are happy with it.")
-    return s, book
+    return s, result.path
+
+
+def apply_rules(args: argparse.Namespace) -> tuple[Summary, Book]:
+    review = Path(args.review)
+    if review.is_dir():
+        review = review / "review.csv"
+    if not review.is_file():
+        raise HbkitError("the review file was not found (give review.csv or the folder that contains it)")
+    rows = read_review(review)
+    input_path = Path(args.file) if args.file else default_input()
+    book = read_file(input_path)
+    output = Path(args.output) if args.output else default_output(Path(args.out))
+    summary, _ = apply_review_rows(rows, book, input_path, output, review.parent)
+    return summary, book
 
 
 ANALYSIS = RuleMining()
