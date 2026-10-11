@@ -159,6 +159,30 @@ table.data input[type=text] { width: 100%; min-width: 160px; padding: 4px 6px; }
 .pill.merged { background: var(--accent-soft); border-color: var(--accent); }
 .pill.bad { background: var(--bad-soft); border-color: var(--bad); }
 .pill.warn { background: var(--warn-soft); border-color: var(--warn); }
+.pill.account { background: var(--warn-soft); border-color: var(--warn); }
+table.data tr.warn-row { background: var(--warn-soft) !important; }
+button.compact { padding: 3px 10px; font-size: 13px; }
+
+/* rule group dialog */
+dialog.rule-dialog {
+  width: min(1300px, calc(100vw - 32px)); max-height: calc(100vh - 32px);
+  border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px;
+  background: var(--panel); color: var(--text);
+  box-shadow: 0 12px 48px rgba(0,0,0,.35);
+}
+dialog.rule-dialog::backdrop { background: rgba(0,0,0,.45); }
+dialog.rule-dialog .table-wrap { max-height: calc(100vh - 480px); min-height: 160px; }
+dialog.rule-dialog .facts { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin: 6px 0; }
+dialog.rule-dialog .fact { padding: 5px 10px; display: flex; align-items: baseline; gap: 8px; }
+dialog.rule-dialog .fact b { display: inline; font-size: 18px; }
+dialog.rule-dialog .tabs { margin: 8px 0; }
+dialog.rule-dialog .toolbar { margin: 4px 0 6px; }
+.dialog-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.dialog-head h2 { margin: 0; }
+.dialog-form { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; align-items: center; margin-bottom: 8px; }
+.dialog-form .row input[type=text] { flex: 1; }
+.tabs .spacer { flex: 1; }
+.tabs button.compact { border: 1px solid var(--line); border-radius: 6px; align-self: center; }
 .pager { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 
 .toast {

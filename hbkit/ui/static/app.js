@@ -126,7 +126,7 @@ function dataTable(header, rows, opts = {}) {
   const search = h('input', { type: 'search', placeholder: 'Filter rows…', oninput: e => { filter = e.target.value.toLowerCase(); page = 0; draw(); } });
   const pager = h('div', { class: 'pager' });
   const tbl = h('table', { class: 'data' });
-  wrap.append(h('div', { class: 'toolbar' }, search, count), h('div', { class: 'table-wrap' }, tbl), pager);
+  wrap.append(h('div', { class: 'toolbar' }, opts.toolbar || null, search, count), h('div', { class: 'table-wrap' }, tbl), pager);
 
   function draw() {
     let list = filter ? rows.filter(r => r.some(c => String(c).toLowerCase().includes(filter))) : rows.slice();
@@ -147,7 +147,8 @@ function dataTable(header, rows, opts = {}) {
       title: 'Click to sort',
       onclick: () => { sortDir = sortCol === i ? -sortDir : 1; sortCol = i; draw(); },
     }, name.replaceAll('_', ' '))));
-    const body = shown.map(r => h('tr', {}, r.map((c, i) => h('td', { class: numericCols[i] ? 'num' : null, text: c }))));
+    const body = shown.map(r => h('tr', { class: opts.rowClass ? opts.rowClass(r) : null },
+      r.map((c, i) => h('td', { class: numericCols[i] ? 'num' : null, text: c }))));
     tbl.replaceChildren(h('thead', {}, head), h('tbody', {}, body));
     pager.replaceChildren();
     if (pages > 1) {
@@ -165,6 +166,26 @@ async function fileView(run, name) {
   const data = await api(`/api/table?run=${encodeURIComponent(run)}&name=${encodeURIComponent(name)}`);
   if (data.text !== undefined) return h('pre', { class: 'report', text: data.text });
   return dataTable(data.header, data.rows);
+}
+
+// --- CSV downloads, made in the browser: the file goes to the browser's Downloads folder ----------------------
+
+function toCsv(header, rows) {
+  const cell = v => {
+    const s = v === null || v === undefined ? '' : String(v);
+    return /[",\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+  };
+  return [header, ...rows].map(r => r.map(cell).join(',')).join('\r\n') + '\r\n';
+}
+
+function downloadCsv(filename, header, rows) {
+  // The byte-order mark makes Excel read the file as UTF-8, like the toolkit's own CSV files.
+  const url = URL.createObjectURL(new Blob(['\ufeff', toCsv(header, rows)], { type: 'text/csv;charset=utf-8' }));
+  const a = h('a', { href: url, download: filename, hidden: true });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 // --- 1. file ----------------------------------------------------------------------------------------------
@@ -289,11 +310,21 @@ async function viewReview() {
     ['Suggested rules', () => suggestedRules(current.run)],
     ['Your existing rules', () => fileView(current.run, 'existing_rules.csv')],
     ['Inconsistent descriptions', () => fileView(current.run, 'inconsistent_patterns.csv')],
+    ['Depends on account', async () => h('div', {},
+      h('p', { class: 'muted small' },
+        'Descriptions you categorise differently depending on the account, for example interest on two home loans ',
+        'that belong to two properties. HomeBank rules cannot be limited to one account, so a rule can only tell ',
+        'the accounts apart when the descriptions differ, for example by a policy or loan number. Where a text was ',
+        'found it is suggested as an account rule (kind "account" on the Suggested rules tab). Where the outcome is ',
+        '"no rule text tells this account\'s transactions apart", the descriptions are the same in each account and ',
+        'no HomeBank rule can categorise them correctly: categorise those by hand.'),
+      await fileView(current.run, 'account_dependent.csv'))],
     ['Overlapping rules', () => fileView(current.run, 'overlaps.csv')],
     ['Back-test', async () => h('div', {}, h('h3', { text: 'Overall' }), await fileView(current.run, 'backtest.csv'),
       h('h3', { text: 'Per category' }), await fileView(current.run, 'backtest_by_category.csv'))],
     ['Set aside', () => fileView(current.run, 'rejected_candidates.csv')],
-  ].filter(([name]) => name !== 'Back-test' || current.files.includes('backtest.csv'));
+  ].filter(([name]) => (name !== 'Back-test' || current.files.includes('backtest.csv')) &&
+    (name !== 'Depends on account' || current.files.includes('account_dependent.csv')));
   const tabBar = h('div', { class: 'tabs' });
   async function show(i) {
     if (i !== 0 && !confirmLeave()) return;
@@ -321,7 +352,8 @@ async function suggestedRules(run) {
   const get = (r, name) => (col[name] === undefined ? '' : r[col[name]]);
   const rules = data.rows.map(r => ({
     id: get(r, 'rule_id'), approve: TRUE_VALUES.has(String(get(r, 'approve')).toLowerCase()),
-    text: get(r, 'rule_text'), category: get(r, 'category'), kind: get(r, 'kind'),
+    text: get(r, 'rule_text'), category: get(r, 'category'), kind: get(r, 'kind'), raw: r,
+    forAccount: get(r, 'for_account'), otherAccounts: get(r, 'other_accounts_differ'),
     matched: Number(get(r, 'transactions_matched')) || 0, correct: get(r, 'correct_pct'),
     fill: Number(get(r, 'would_fill_uncategorised')) || 0, backtest: get(r, 'backtest'),
     btMatched: get(r, 'backtest_matched'), btCorrect: get(r, 'backtest_correct_pct'),
@@ -332,6 +364,7 @@ async function suggestedRules(run) {
 
   const datalist = h('datalist', { id: 'category-list' }, categories.map(c => h('option', { value: c })));
   const filters = { text: '', kind: '', hideCovered: false, conflictsOnly: false, approvedOnly: false };
+  let lastDrawn = [];
   let sortKey = 'matched', sortDir = -1;
   const counter = h('span', { class: 'muted small' });
   const tbl = h('table', { class: 'data' });
@@ -341,7 +374,7 @@ async function suggestedRules(run) {
     (!filters.text || `${r.text} ${r.category} ${r.examples} ${r.notes}`.toLowerCase().includes(filters.text)) &&
     (!filters.kind || r.kind === filters.kind) &&
     (!filters.hideCovered || !r.coveredBy) &&
-    (!filters.conflictsOnly || r.conflicts) &&
+    (!filters.conflictsOnly || r.conflicts || r.otherAccounts) &&
     (!filters.approvedOnly || r.approve));
 
   function markDirty() {
@@ -354,7 +387,7 @@ async function suggestedRules(run) {
   }
 
   const columns = [
-    ['approve', 'Approve'], ['text', 'Rule text'], ['category', 'Category'], ['kind', 'Kind'],
+    ['approve', 'Approve'], ['text', 'Rule text'], ['category', 'Category'], ['group', 'Group'], ['kind', 'Kind'],
     ['matched', 'Matched'], ['correct', 'Correct %'], ['fill', 'Fills empty'], ['btCorrect', 'Back-test'],
     ['conflicts', 'Conflicts'], ['notes', 'Notes'], ['examples', 'Examples'],
   ];
@@ -366,9 +399,13 @@ async function suggestedRules(run) {
       if (x !== '' && y !== '' && !isNaN(nx) && !isNaN(ny)) return (nx - ny) * sortDir;
       return String(x).localeCompare(String(y), 'en-ZA') * sortDir;
     });
+    lastDrawn = list;
     const head = h('tr', {}, columns.map(([key, label]) => h('th', {
       class: key === sortKey ? (sortDir > 0 ? 'sorted-asc' : 'sorted-desc') : null,
-      onclick: () => { sortDir = sortKey === key ? -sortDir : (['matched', 'fill', 'correct', 'btCorrect'].includes(key) ? -1 : 1); sortKey = key; draw(); },
+      onclick: () => {
+        if (key === 'group') return;
+        sortDir = sortKey === key ? -sortDir : (['matched', 'fill', 'correct', 'btCorrect'].includes(key) ? -1 : 1); sortKey = key; draw();
+      },
     }, label)));
     const body = list.map(r => {
       const tr = h('tr', { class: r.approve ? 'approved' : null });
@@ -378,16 +415,20 @@ async function suggestedRules(run) {
       const cat = h('input', { type: 'text', value: r.category, list: 'category-list',
         class: catSet.has(r.category.toLowerCase()) ? null : 'invalid',
         oninput: e => { r.category = e.target.value; e.target.classList.toggle('invalid', !catSet.has(r.category.trim().toLowerCase())); markDirty(); } });
-      const kind = h('span', { class: `pill ${r.kind === 'merged' ? 'merged' : ''}`, text: r.kind, title: r.coveredBy ? `Also covered by merged rule ${r.coveredBy}` : null });
+      const kind = h('span', { class: `pill ${r.kind === 'pattern' ? '' : r.kind}`, text: r.kind, title: r.coveredBy ? `Also covered by merged rule ${r.coveredBy}` : null });
       const bt = r.backtest === 'tested' ? `${r.btCorrect}% of ${r.btMatched}` : (r.backtest === 'not run' ? '–' : 'new');
       const ex = String(r.examples).split(' | ');
       tr.append(
         h('td', {}, check), h('td', {}, text), h('td', {}, cat),
-        h('td', {}, kind, r.coveredBy ? h('div', { class: 'small muted', text: `in ${r.coveredBy}` }) : null),
+        h('td', {}, h('button', { type: 'button', class: 'compact', title: 'Show the transactions this rule matches',
+          onclick: () => showGroup(r) }, 'View')),
+        h('td', {}, kind, r.coveredBy ? h('div', { class: 'small muted', text: `in ${r.coveredBy}` }) : null,
+          r.forAccount ? h('div', { class: 'small muted', text: `for ${r.forAccount}` }) : null),
         h('td', { class: 'num', text: r.matched }), h('td', { class: 'num', text: r.correct }),
         h('td', { class: 'num', text: r.fill || '' }),
         h('td', { class: 'num', text: bt, title: r.backtest === 'tested' ? 'correct in the back-test years' : 'not found when rules were built from the older years' }),
-        h('td', {}, r.conflicts ? h('span', { class: 'pill bad', text: r.conflicts }) : ''),
+        h('td', {}, r.conflicts ? h('span', { class: 'pill bad', text: r.conflicts }) : '',
+          r.otherAccounts ? h('span', { class: 'pill warn', text: 'another account differs', title: r.otherAccounts }) : ''),
         h('td', { class: 'notes', text: r.notes }),
         h('td', { class: 'examples', title: ex.join('\n'), text: ex[0] + (ex.length > 1 ? `  (+${ex.length - 1} more)` : '') }));
       return tr;
@@ -397,6 +438,59 @@ async function suggestedRules(run) {
   }
 
   const edits = () => rules.map(r => ({ rule_id: r.id, approve: r.approve, rule_text: r.text, category: r.category }));
+
+  // Download the rules as shown (filters and sort order), with your approvals and edits, in the review.csv layout.
+  const download = h('button', { type: 'button', title: 'Save the rules shown, with your ticks and edits, as a CSV file' }, 'Download shown (CSV)');
+  download.addEventListener('click', () => {
+    if (!lastDrawn.length) { toast('No rules are shown.', true); return; }
+    const at = name => data.header.indexOf(name);
+    const rows = lastDrawn.map(r => {
+      const row = r.raw.slice();
+      if (at('approve') >= 0) row[at('approve')] = r.approve ? 'y' : '';
+      if (at('rule_text') >= 0) row[at('rule_text')] = r.text;
+      if (at('category') >= 0) row[at('category')] = r.category;
+      return row;
+    });
+    downloadCsv(`suggested-rules_${run.split('/').pop()}.csv`, data.header, rows);
+    toast(`${rows.length} rule(s) downloaded as a CSV file (see your browser's downloads).`);
+  });
+
+  // The transactions a rule matches, to check that they belong together.
+  const dialog = h('dialog', { class: 'rule-dialog', onclose: () => draw() });
+  function showGroup(r) {
+    const pos = lastDrawn.indexOf(r);
+    const body = h('div');
+    const check = h('input', { type: 'checkbox', checked: r.approve, onchange: e => { r.approve = e.target.checked; markDirty(); } });
+    const text = h('input', { type: 'text', class: 'wide', value: r.text, oninput: e => { r.text = e.target.value; markDirty(); } });
+    const cat = h('input', { type: 'text', class: `wide ${catSet.has(r.category.trim().toLowerCase()) ? '' : 'invalid'}`, value: r.category, list: 'category-list',
+      oninput: e => { r.category = e.target.value; e.target.classList.toggle('invalid', !catSet.has(r.category.trim().toLowerCase())); markDirty(); } });
+    async function load() {
+      body.replaceChildren(h('p', { class: 'muted', text: 'Finding the transactions…' }));
+      try {
+        const q = `run=${encodeURIComponent(run)}&text=${encodeURIComponent(r.text)}&category=${encodeURIComponent(r.category)}`;
+        body.replaceChildren(matchesView(await api(`/api/review/matches?${q}`), r));
+      } catch (err) { body.replaceChildren(h('div', { class: 'notice bad', text: err.message })); }
+    }
+    const nav = (step, label) => h('button', { type: 'button', disabled: pos < 0 || !lastDrawn[pos + step],
+      onclick: () => showGroup(lastDrawn[pos + step]) }, label);
+    dialog.replaceChildren(
+      h('div', { class: 'dialog-head' },
+        h('h2', { text: `Rule ${r.id}` }),
+        h('span', { class: `pill ${r.kind === 'pattern' ? '' : r.kind}`, text: r.kind }),
+        r.forAccount ? h('span', { class: 'muted small', text: `for ${r.forAccount}` }) : null,
+        h('span', { class: 'muted small', text: pos >= 0 ? `${pos + 1} of ${lastDrawn.length} shown` : '' }),
+        h('span', { class: 'spacer' }),
+        nav(-1, '‹ Previous rule'), nav(1, 'Next rule ›'),
+        h('button', { type: 'button', class: 'primary', onclick: () => dialog.close() }, 'Close')),
+      h('div', { class: 'dialog-form' },
+        h('label', { text: 'Rule text' }), h('div', { class: 'row' }, text,
+          h('button', { type: 'button', onclick: load, title: 'Show what the text matches now' }, 'Show matches')),
+        h('label', { text: 'Category' }), cat,
+        h('span'), h('label', {}, check, ' Approve this rule')),
+      body);
+    if (!dialog.open) dialog.showModal();
+    load();
+  }
   const setShown = value => { visible().forEach(r => { r.approve = value; }); markDirty(); draw(); };
   const save = h('button', { type: 'button' }, 'Save approvals');
   save.addEventListener('click', () => busy(save, 'Saving', async () => {
@@ -420,7 +514,8 @@ async function suggestedRules(run) {
   });
 
   const kindSel = h('select', { onchange: e => { filters.kind = e.target.value; draw(); } },
-    h('option', { value: '' }, 'All kinds'), h('option', { value: 'pattern' }, 'Pattern rules'), h('option', { value: 'merged' }, 'Merged rules'));
+    h('option', { value: '' }, 'All kinds'), h('option', { value: 'pattern' }, 'Pattern rules'), h('option', { value: 'merged' }, 'Merged rules'),
+    h('option', { value: 'account' }, 'Account rules'));
   const toggle = (label, key) => h('label', { class: 'small' },
     h('input', { type: 'checkbox', onchange: e => { filters[key] = e.target.checked; draw(); } }), ' ', label);
 
@@ -430,17 +525,85 @@ async function suggestedRules(run) {
     h('p', { class: 'muted small' },
       'Tick the rules you want. You can change the rule text or pick another category. ',
       'New rules match when the memo contains the text (ignoring case) and set the category only when it is empty. ',
-      'Merged rules cover several descriptions at once; the rules they cover are marked "in N…".'),
+      'Merged rules cover several descriptions at once; the rules they cover are marked "in N…". ',
+      'Account rules pick out one account\'s transactions by a text only that account\'s descriptions contain. ',
+      'Click View to see every transaction a rule matches.'),
     h('div', { class: 'toolbar' },
       h('input', { type: 'search', placeholder: 'Search rules, categories, examples…', oninput: e => { filters.text = e.target.value.toLowerCase(); draw(); } }),
       kindSel, toggle('Hide rules covered by a merged rule', 'hideCovered'),
-      toggle('Only conflicts with existing rules', 'conflictsOnly'), toggle('Only approved', 'approvedOnly')),
+      toggle('Only conflicts (existing rules or other accounts)', 'conflictsOnly'), toggle('Only approved', 'approvedOnly')),
     h('div', { class: 'toolbar' },
       h('button', { type: 'button', onclick: () => setShown(true) }, 'Approve all shown'),
       h('button', { type: 'button', onclick: () => setShown(false) }, 'Clear all shown'),
-      counter, h('span', { class: 'spacer' }), save, apply),
+      counter, h('span', { class: 'spacer' }), download, save, apply),
     h('div', { class: 'table-wrap' }, tbl),
-    result);
+    result, dialog);
+}
+
+const RESULT_OTHER = 'other category', RESULT_FILL = 'no category: would be filled';
+
+function matchesView(res, rule) {
+  const at = Object.fromEntries(res.header.map((name, i) => [name, i]));
+  const rows = res.rows;
+  const n = value => rows.filter(x => x[at.result] === value).length;
+  const fact = (value, label) => h('div', { class: 'fact' }, h('b', { text: value }), h('span', { text: label }));
+  const parts = [h('div', { class: 'facts' },
+    fact(rows.length, 'transactions match'), fact(n('same category'), 'have this category'),
+    fact(n(RESULT_OTHER), 'have another category'), fact(n(RESULT_FILL), 'have none: the rule would fill them'))];
+  if (res.file_changed) parts.push(h('div', { class: 'notice warn', text: 'Your HomeBank file has changed since these results were made. This list is from the file as it is now.' }));
+  if (!res.category_found) parts.push(h('div', { class: 'notice warn', text: 'That category does not exist in the file, so no transaction counts as having it.' }));
+  parts.push(h('p', { class: 'muted small', text: `Matched the HomeBank way: the ${res.field} contains the rule text, ignoring case. ` +
+    'Void, split and (unless chosen in rule mining) transfer transactions are left out.' }));
+  if (!rows.length) {
+    parts.push(h('div', { class: 'notice', text: 'This text matches no transactions.' }));
+    return h('div', {}, parts);
+  }
+
+  // Description groups: transactions with the same cleaned description (card numbers, dates and references removed).
+  const groups = new Map();
+  for (const x of rows) {
+    const key = x[at.pattern];
+    let g = groups.get(key);
+    if (!g) groups.set(key, g = { n: 0, cats: new Map(), accounts: new Set(), first: x[at.date], last: x[at.date], example: x[at.memo] });
+    g.n++;
+    const c = x[at.category] || '(none)';
+    g.cats.set(c, (g.cats.get(c) || 0) + 1);
+    g.accounts.add(x[at.account]);
+    if (x[at.date] < g.first) g.first = x[at.date];
+    if (x[at.date] > g.last) g.last = x[at.date];
+  }
+  const groupRows = [...groups].map(([pattern, g]) => [pattern, g.n,
+    [...g.cats].sort((a, b) => b[1] - a[1]).map(([c, k]) => `${c} (${k})`).join(' · '),
+    [...g.accounts].join(' · '), g.first, g.last, g.example]).sort((a, b) => b[1] - a[1]);
+  const txnCols = ['date', 'account', 'memo', 'payee', 'category', 'amount', 'result'];
+  const money = v => Number(v).toFixed(2);
+  let only = '';
+  const txnArea = h('div');
+  const drawTxns = () => {
+    const list = rows.filter(x => !only || x[at.result] === only);
+    txnArea.replaceChildren(dataTable(txnCols, list.map(x => txnCols.map(c => c === 'amount' ? money(x[at.amount]) : x[at[c]])),
+      { pageSize: 200, rowClass: r => (r[6] === RESULT_OTHER ? 'warn-row' : null), toolbar: onlySel }));
+  };
+  const onlySel = h('select', { onchange: e => { only = e.target.value; drawTxns(); } },
+    h('option', { value: '' }, 'All transactions'), h('option', { value: RESULT_OTHER }, 'Only with another category'),
+    h('option', { value: RESULT_FILL }, 'Only without a category'));
+  const area = h('div');
+  const tabBar = h('div', { class: 'tabs' });
+  const tabs = [
+    [`Description groups (${groupRows.length})`, () => h('div', {},
+      h('p', { class: 'muted small', text: 'Transactions with the same description once card numbers, dates and references are removed.' }),
+      dataTable(['description_group', 'transactions', 'categories', 'accounts', 'first', 'last', 'example'], groupRows, { pageSize: 100 }))],
+    [`Transactions (${rows.length})`, () => { drawTxns(); return txnArea; }],
+  ];
+  const show = i => {
+    [...tabBar.children].forEach((b, j) => b.classList.toggle('active', i === j));
+    area.replaceChildren(tabs[i][1]());
+  };
+  tabs.forEach(([label], i) => tabBar.append(h('button', { type: 'button', onclick: () => show(i) }, label)));
+  tabBar.append(h('span', { class: 'spacer' }), h('button', { type: 'button', class: 'compact',
+    onclick: () => downloadCsv(`rule_${rule.id}_transactions.csv`, res.header, rows) }, 'Download these transactions (CSV)'));
+  show(groupRows.length > 1 ? 0 : 1);
+  return h('div', {}, parts, tabBar, area);
 }
 
 // --- reports -----------------------------------------------------------------------------------------------

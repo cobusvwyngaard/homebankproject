@@ -196,6 +196,40 @@ class ApiTests(ServerTestCase):
         self.api("/api/open", {"path": applied["output"]})
         self.assertEqual(self.opened, [self.out.resolve()])
 
+    def test_rule_group_transactions(self):
+        from urllib.parse import quote
+
+        run = self.api("/api/run", {"analysis": "rule-mining", "params": {}})["run"]
+        review = {r[1]: r for r in self.api(f"/api/table?run={run}&name=review.csv")["rows"]}
+        with open(self.out / run / "rule_transactions.csv", encoding="utf-8-sig", newline="") as fh:
+            written = list(csv.DictReader(fh))
+        rule_id, row = next((k, r) for k, r in review.items() if r[2] == "WOOLWORTHS")
+        text, category = row[2], row[3]
+
+        def matches(text, category, run=run):
+            return self.api(f"/api/review/matches?run={quote(run)}&text={quote(text)}&category={quote(category)}")
+
+        res = matches(text, category)
+        self.assertEqual(res["header"][-1], "pattern")
+        self.assertEqual(res["field"], "memo")
+        self.assertTrue(res["category_found"])
+        self.assertFalse(res["file_changed"])
+        same = [w for w in written if w["rule_id"] == rule_id]
+        self.assertEqual(len(res["rows"]), len(same))  # the same list as the file written by the run
+        self.assertEqual(sorted(r[2] for r in res["rows"]), sorted(w["memo"] for w in same))
+        self.assertGreater(len({r[-1] for r in res["rows"]}), 2)  # several branches: several description groups
+
+        narrower = matches("WOOLWORTHS SANDTON", category)  # an edited text is matched on the spot
+        self.assertLess(len(narrower["rows"]), len(res["rows"]))
+        self.assertTrue(all("SANDTON" in r[2].upper() for r in narrower["rows"]))
+        self.assertFalse(matches(text, "No such category")["category_found"])
+        self.assertEqual(matches("", category)["rows"], [])
+
+        self.src.write_bytes(sample(seed=3).data)  # the file changed since the run
+        self.assertTrue(matches(text, category)["file_changed"])
+        self.assertEqual(self.request("GET", "/api/review/matches?run=../..&text=x")[0], 403)
+        self.assertEqual(self.request("GET", "/api/review/matches?run=rule-mining/none&text=x")[0], 404)
+
     def test_export_sqlite(self):
         res = self.api("/api/export-sqlite", {})
         self.assertTrue((self.out / "homebank.sqlite").is_file())

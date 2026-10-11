@@ -19,6 +19,7 @@ on their computer. The terminal stays aggregate-only.
 from __future__ import annotations
 
 import csv
+import hashlib
 import hmac
 import json
 import os
@@ -64,6 +65,7 @@ class UiState:
         self.lock = threading.RLock()  # one job at a time
         self._book = None
         self._book_stamp = None
+        self._matches = None  # (key, RuleMatches, sha256 of the file) for the rule review page
         if self.input_path is None:
             files = self.data_files()
             if len(files) == 1:
@@ -89,6 +91,17 @@ class UiState:
             self._book = read_file(self.input_path)
             self._book_stamp = stamp
         return self._book
+
+    def rule_matches(self, field_name: str, include_transfers: bool):
+        """A RuleMatches for the selected file, kept until the file or the settings change."""
+        from ..analyses.rule_mining import RuleMatches
+
+        book = self.book()
+        key = (self._book_stamp, field_name, include_transfers)
+        if self._matches is None or self._matches[0] != key:
+            self._matches = (key, RuleMatches.for_book(book, field_name, include_transfers),
+                             hashlib.sha256(book.raw).hexdigest())
+        return self._matches[1], self._matches[2]
 
     def inside_out(self, rel: str) -> Path:
         """A path under the output folder; refuses anything that escapes it."""
@@ -256,6 +269,31 @@ def api_table(state: UiState, q: dict, body: Any) -> dict:
         return {"header": header, "rows": list(reader)}
 
 
+def api_review_matches(state: UiState, q: dict, body: Any) -> dict:
+    """The transactions a rule text matches in the selected file (also for edited texts)."""
+    from ..analyses.rule_mining import MATCH_HEADER
+
+    meta_path = _run_file(state, q.get("run", ""), "summary.json")
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        params = meta.get("parameters") or {}
+    except ValueError:
+        meta, params = {}, {}
+    field_name = params.get("field") if params.get("field") in ("memo", "payee") else "memo"
+    text = q.get("text", "")
+    with state.lock:
+        matches, sha = state.rule_matches(field_name, bool(params.get("include_transfers")))
+        category = matches.book.category_by_path(q.get("category", ""))
+        rows = matches.rows(text, category.key if category else 0)
+    return {
+        "header": MATCH_HEADER,
+        "rows": rows,
+        "field": field_name,
+        "category_found": category is not None,
+        "file_changed": bool(meta.get("source_sha256")) and meta.get("source_sha256") != sha,
+    }
+
+
 def api_categories(state: UiState, q: dict, body: Any) -> list:
     with state.lock:
         book = state.book()
@@ -416,6 +454,7 @@ ROUTES = {
     ("GET", "/api/runs"): api_runs,
     ("GET", "/api/table"): api_table,
     ("GET", "/api/categories"): api_categories,
+    ("GET", "/api/review/matches"): api_review_matches,
     ("POST", "/api/review/save"): api_review_save,
     ("POST", "/api/review/apply"): api_review_apply,
     ("POST", "/api/export-sqlite"): api_export_sqlite,

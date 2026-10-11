@@ -383,7 +383,7 @@ def _yn(flag: Any) -> str:
 
 # --- the transactions a rule text matches -----------------------------------------------------------
 
-MATCH_HEADER = ["date", "account", "memo", "payee", "category", "amount", "result"]
+MATCH_HEADER = ["date", "account", "memo", "payee", "category", "amount", "result", "pattern"]
 RESULT_SAME, RESULT_OTHER, RESULT_FILL = "same category", "other category", "no category: would be filled"
 
 
@@ -408,7 +408,8 @@ class RuleMatches:
         return cls(book, items, Matcher(view), mp.field)
 
     def rows(self, text: str, category_key: int = 0) -> list[list]:
-        """One row per matched transaction (MATCH_HEADER), newest first."""
+        """One row per matched transaction (MATCH_HEADER), newest first. "pattern" is the
+        cleaned description, which groups transactions of the same kind."""
         if not text.strip():
             return []
         rule = SimRule(id=text, search=text, flags=NEW_RULE_FLAGS, match_field=self.field)
@@ -422,7 +423,7 @@ class RuleMatches:
             result = RESULT_FILL if not it.category else RESULT_SAME if it.category == category_key else RESULT_OTHER
             payee = book.payees[t.payee_key].name if t.payee_key in book.payees else ""
             out.append([it.date.isoformat(), book.account_name(t.account_key) or "", t.memo, payee,
-                        book.category_path(it.category) or "", t.amount, result])
+                        book.category_path(it.category) or "", t.amount, result, it.pattern])
         out.sort(key=lambda r: r[0], reverse=True)
         return out
 
