@@ -183,3 +183,75 @@ class AnnualOverviewTests(ReportTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@needs_plotly
+class CategoryTrendsTests(ReportTestCase):
+    def rows(self, page, mode="nominal"):
+        """{first cell: (cells, is_highlighted)} for the per-category table of one mode."""
+        part = page.split('data-mode="real"')[0 if mode == "nominal" else 1]
+        out = {}
+        for cls, row in re.findall(r'<tr class="([^"]*)">(.*?)</tr>', part):
+            cells = [html.unescape(re.sub("<[^>]+>", "", c)).strip().lstrip(" ")
+                     for c in re.findall(r"<td[^>]*>(.*?)</td>", row)]
+            if cells:
+                out.setdefault(cells[0], (cells, "highlight" in cls))
+        return out
+
+    def test_faster_than_inflation(self):
+        page, out, _ = self.cli("category-trends")
+        rows = self.rows(page)
+        self.assertTrue(rows["Electricity"][1])  # prices rise 15% a year in the fake data
+        self.assertTrue(rows["Utilities"][1])
+        self.assertFalse(rows["Car insurance"][1])  # rises exactly with inflation
+        self.assertFalse(rows["Education"][1])
+        self.assertIn("Growing faster than inflation", out)
+
+    def test_margin_option(self):
+        none, _, _ = self.cli("category-trends", "--inflation-margin", "50")
+        self.assertFalse(any(flag for _, flag in self.rows(none).values()))
+        page, _, _ = self.cli("category-trends", "--inflation-margin", "0")
+        self.assertGreaterEqual(sum(f for _, f in self.rows(page).values()),
+                                sum(f for _, f in self.rows(self.cli("category-trends")[0]).values()))
+
+    def test_amounts_match_the_views(self):
+        page, _, _ = self.cli("category-trends")
+        rows = self.rows(page)
+        book = read_bytes(sample(reporting=True).data)
+        settings = Settings(year_mode="tax", exclude_accounts=["Business account", "Old cheque account"])
+        data = build_report_data(book, settings)
+        groceries_2024 = -data.conn.execute(
+            "SELECT SUM(total) FROM r_category_period WHERE flow='expense' AND category_top='Groceries' "
+            "AND period=2025").fetchone()[0]
+        data.close()
+        header_index = 1 + 5  # columns: name, 2019/20 ... 2024/25 is the sixth year
+        self.assertEqual(rows["Groceries"][0][header_index], money(groceries_2024, "R", 0))
+
+    def test_inflation_adjusted_amounts(self):
+        page, _, _ = self.cli("category-trends")
+        real = self.rows(page, "real")
+        # Car insurance has a fixed price that rises exactly with CPI, so in today's prices it is flat.
+        values = [float(v.replace("R", "").replace(" ", "")) for v in real["Car insurance"][0][2:7]]
+        self.assertLess(max(values) - min(values), 0.002 * max(values))
+        self.assertEqual(real["Car insurance"][0][8], "+0.0%")  # real growth
+
+    def test_groups(self):
+        page, _, _ = self.cli("category-trends")
+        rows = self.rows(page)
+        for group in ("tax: rental – property A", "tax: medical", "essential", "discretionary"):
+            self.assertIn(group, rows)
+
+    def test_without_cpi(self):
+        self.settings_path.write_text(SETTINGS_TOML.replace('cpi_file = "cpi.csv"', ""), encoding="utf-8")
+        page, _, _ = self.cli("category-trends")
+        self.assertIn("No CPI table is set up", text_of(page))
+        self.assertNotIn('data-mode="real"', page)
+        self.assertNotIn("Faster than inflation", text_of(page))
+
+    def test_growth_rules(self):
+        from hbkit.reports.category_trends import average_growth
+
+        self.assertAlmostEqual(average_growth({1: 100, 3: 121}, 1, 3)[0], 0.10)
+        self.assertEqual(average_growth({3: 121}, 1, 3), (None, "new"))
+        self.assertEqual(average_growth({1: 100}, 1, 3), (None, "stopped"))
+        self.assertEqual(average_growth({1: 100, 3: 121}, None, None), (None, ""))

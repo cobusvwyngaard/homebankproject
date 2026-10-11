@@ -40,7 +40,7 @@ tr.highlight td { background: #fff3df; }
 .tile .delta { font-size: 13px; color: %(text2)s; }
 .note { color: %(text2)s; font-size: 13px; }
 .warn { background: #fff3df; border-left: 4px solid #c98500; padding: 8px 12px; border-radius: 6px; }
-.badge { display: inline-block; padding: 0 7px; border-radius: 9px; font-size: 12px; background: #fff3df; border: 1px solid #c98500; }
+.badge { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 9px; font-size: 12px; background: #fff3df; border: 1px solid #c98500; }
 .toggle { display: flex; gap: 6px; margin: 8px 0; flex-wrap: wrap; }
 .toggle button { font: inherit; padding: 5px 12px; border: 1px solid %(grid)s; border-radius: 6px; background: %(surface)s; cursor: pointer; }
 .toggle button.on { background: %(text)s; color: %(surface)s; border-color: %(text)s; }
@@ -90,6 +90,8 @@ def money(value: float | None, symbol: str = "R", decimals: int = 2) -> str:
 def percent(value: float | None, decimals: int = 1, signed: bool = False) -> str:
     if value is None:
         return "–"
+    if round(value, decimals) == 0:
+        value = 0.0  # no "-0.0%"
     return f"{value:+.{decimals}f}%" if signed else f"{value:.{decimals}f}%"
 
 
