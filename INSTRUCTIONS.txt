@@ -128,7 +128,13 @@ A report says the chart library (Plotly) is not installed
 "no .xhb file found in the data folder"
     Do step 6. If there are several .xhb files there, keep only one.
 
+"unknown request", or "The toolkit was updated while it was running"
+    The black window is still running an older version. Close every
+    toolkit window, then double-click hb-ui.cmd again (in the folder
+    with the new version).
+
 Updating to a newer version of the toolkit
-    Download and unpack the new ZIP, do steps 3 to 5 in the new folder,
+    Close the toolkit's black window first. Download and unpack the new
+    ZIP, do steps 3 to 5 in the new folder,
     then copy the CONTENTS of the old data folder (your file, settings
     and results) into the new data folder.

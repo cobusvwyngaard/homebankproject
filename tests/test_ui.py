@@ -95,6 +95,40 @@ class SecurityTests(ServerTestCase):
         self.assertEqual(status, 403)
         self.assertEqual(self.opened, [])
 
+    def test_update_while_running_is_explained(self):
+        # Simulate a toolkit folder whose files are replaced while the server runs.
+        code = self.tmp / "toolkit"
+        code.mkdir()
+        (code / "server.py").write_text("old")
+        (code / "__pycache__").mkdir()
+        saved = ui.CODE_DIR
+        ui.CODE_DIR = code
+        try:
+            server = ui.make_server(self.state, 0)
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                def status():
+                    conn = http.client.HTTPConnection("127.0.0.1", server.port, timeout=30)
+                    conn.request("GET", "/api/status", headers={"Host": f"127.0.0.1:{server.port}",
+                                                                "X-Hbkit-Token": server.token})
+                    res = conn.getresponse()
+                    body = json.loads(res.read())
+                    conn.close()
+                    return res.status, body
+
+                self.assertEqual(status()[0], 200)
+                (code / "__pycache__" / "server.cpython-313.pyc").write_text("cache")  # Python's own caches
+                self.assertEqual(status()[0], 200)
+                (code / "server.py").write_text("new version")
+                code_, body = status()
+                self.assertEqual(code_, 409)
+                self.assertIn("start hb-ui.cmd again", body["error"])
+            finally:
+                server.shutdown()
+                server.server_close()
+        finally:
+            ui.CODE_DIR = saved
+
     def test_static_files_and_headers(self):
         status, body, res = self.request("GET", "/", token=False)
         self.assertEqual(status, 200)

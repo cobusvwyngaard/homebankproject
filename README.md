@@ -522,6 +522,7 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 | `.\hb` does nothing / `.venv` missing | Do step 3 of the set-up again. |
 | The browser says "missing or wrong key" | Use the full address shown in the black window (it ends in `#token=…`); the key changes each time the toolkit starts. |
 | The browser page stops responding | The black window was closed. Start `hb-ui.cmd` again. |
+| `unknown request`, or `The toolkit was updated while it was running` | The black window still runs an older version (it was left open during an update). Close every toolkit window and start `hb-ui.cmd` again. |
 | `the reports need Plotly, which is not installed yet` | Do step 5 of the set-up (no internet needed). |
 | `the settings file is not valid TOML (… line N …)` | Check that line in `data\settings.toml`: text in "double quotes", lists in [ ], one setting per line. |
 | `the CPI file named in the settings was not found` | Put the CSV next to `settings.toml`, or give its full path. |

@@ -12,6 +12,11 @@ Built on Python's own http.server; no dependencies. Security model:
 * Pages are sent with a strict Content-Security-Policy and contain no external
   resources, so nothing is loaded from or sent to the internet.
 
+The page files are read from disk on every request, but the Python code is loaded
+once at start-up. If the toolkit's files are replaced while it runs (an update), the
+browser would get the new page from the old program and fail in odd ways ("unknown
+request"), so every API request first checks that the toolkit's files are unchanged.
+
 The browser interface shows the user's own data (memos, names), because it only runs
 on their computer. The terminal stays aggregate-only.
 """
@@ -39,6 +44,10 @@ from ..errors import HbkitError
 from ..privacy import DATA_DIR, OUT_DIR, write_error_log
 
 STATIC = Path(__file__).parent / "static"
+#: The toolkit's own files, watched for updates made while the server runs.
+CODE_DIR = Path(__file__).resolve().parent.parent
+UPDATED_MESSAGE = ("The toolkit was updated while it was running. Close its black window (or press Ctrl+C "
+                   "in PowerShell), start hb-ui.cmd again and open the new address.")
 MAX_BODY = 20 * 1024 * 1024
 CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
                  ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml"}
@@ -467,6 +476,16 @@ ROUTES = {
 # --- HTTP plumbing ------------------------------------------------------------------------------------
 
 
+def code_fingerprint() -> tuple:
+    """Name, size and modification time of every toolkit file (not Python's caches)."""
+    files = []
+    for p in sorted(CODE_DIR.rglob("*")):
+        if "__pycache__" not in p.parts and p.is_file():
+            st = p.stat()
+            files.append((p.relative_to(CODE_DIR).as_posix(), st.st_size, st.st_mtime_ns))
+    return tuple(files)
+
+
 class UiServer(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -474,6 +493,7 @@ class UiServer(ThreadingHTTPServer):
         super().__init__(("127.0.0.1", port), Handler)
         self.state = state
         self.token = secrets.token_urlsafe(24)
+        self.code = code_fingerprint()
 
     @property
     def port(self) -> int:
@@ -545,6 +565,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not self._token_ok():
             self._json(HTTPStatus.FORBIDDEN, {"error": "missing or wrong key; open the address printed in PowerShell"})
+            return
+        if code_fingerprint() != self.server.code:
+            self._json(HTTPStatus.CONFLICT, {"error": UPDATED_MESSAGE})
             return
         handler = ROUTES.get((method, url.path))
         if handler is None:
