@@ -1,0 +1,28 @@
+# --- Private data: never commit -------------------------------------------
+# The real HomeBank file lives in data/, results in data/out/.
+# Only the empty placeholder files are tracked so the folders exist after a clone.
+/data/*
+!/data/.gitkeep
+!/data/out/
+/data/out/*
+!/data/out/.gitkeep
+
+# Belt and braces: no HomeBank files, backups or derived databases anywhere,
+# except the synthetic/public fixtures used by the tests.
+*.xhb
+*.xhb~
+*.xhb.bak
+*.bak
+*.sqlite
+*.sqlite3
+*.db
+!/tests/fixtures/**/*.xhb
+
+# --- Python -----------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.coverage
+htmlcov/

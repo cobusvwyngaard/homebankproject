@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(/data)",
+      "Read(/data/**)",
+      "Edit(/data/**)",
+      "Bash(*data/*)",
+      "PowerShell(*data/*)"
+    ]
+  }
+}
