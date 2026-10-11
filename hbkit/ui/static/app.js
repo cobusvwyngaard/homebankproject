@@ -63,7 +63,7 @@ async function busy(button, label, fn) {
 
 function main(...children) {
   const m = document.getElementById('main');
-  m.replaceChildren(...children.flat());
+  m.replaceChildren(...children.flat(Infinity).filter(c => c !== null && c !== undefined && c !== false));
   return m;
 }
 
@@ -934,6 +934,136 @@ async function importPreview(month, file, account, onSaved) {
     result);
 }
 
+// --- fill empty categories ---------------------------------------------------------------------------------
+
+// Which rule decides each transaction with only the selected rules, as HomeBank does:
+// rules in order of position; the first "set category" rule wins, the last "overwrite" rule wins.
+function decideFill(info, selected) {
+  const byId = Object.fromEntries(info.rules.map(r => [r.id, r]));
+  return info.txns.map(t => {
+    let decider = null;
+    for (const id of t.matched) {
+      if (!selected.has(id)) continue;
+      const r = byId[id];
+      if ((decider === null && r.set) || r.overwrite) decider = r;
+    }
+    return decider;
+  });
+}
+
+async function viewFill() {
+  if (!app.status || !app.status.selected) { await needFile(); return; }
+  const info = await api('/api/fill');
+  const selected = new Set();
+  const fact = (value, label) => h('div', { class: 'fact' }, h('b', { text: value }), h('span', { text: label }));
+  const facts = h('div', { class: 'facts' });
+  const counter = h('span', { class: 'muted small' });
+  const boxes = [];
+  const fillCells = {};
+  const allBox = h('input', { type: 'checkbox', title: 'Select all', onchange: e => setAll(e.target.checked) });
+  const fillBtn = h('button', { type: 'button', class: 'primary', disabled: true }, 'Fill in a new copy…');
+  const result = h('div');
+
+  function update() {
+    const decided = decideFill(info, selected);
+    const per = {};
+    decided.forEach(r => { if (r) per[r.id] = (per[r.id] || 0) + 1; });
+    const filled = decided.filter(Boolean).length;
+    for (const r of info.rules) {
+      const n = per[r.id] || 0;
+      const cell = fillCells[r.id];
+      cell.replaceChildren(h('div', {}, selected.has(r.id) ? h('b', { text: n }) : h('span', { class: 'muted', text: '–' }),
+        selected.has(r.id) && n < r.matches ? h('div', { class: 'small muted', text: `${r.matches - n} decided by another rule` }) : null));
+    }
+    facts.replaceChildren(fact(info.without_category, 'transactions without a category'),
+      fact(info.rules.length, 'rules that can set a category'),
+      fact(filled, 'would be filled with your selection'),
+      fact(info.without_category - filled, 'would stay empty'));
+    counter.textContent = `${selected.size} of ${info.rules.length} rules selected`;
+    allBox.checked = info.rules.length > 0 && selected.size === info.rules.length;
+    allBox.indeterminate = selected.size > 0 && selected.size < info.rules.length;
+    fillBtn.disabled = filled === 0;
+    fillBtn.dataset.count = filled;
+  }
+  function setAll(on) {
+    boxes.forEach(({ box, id, tr }) => { box.checked = on; tr.classList.toggle('approved', on); on ? selected.add(id) : selected.delete(id); });
+    update();
+  }
+
+  // The transactions one rule matches, and which rule fills each with the current selection.
+  const dialog = h('dialog', { class: 'rule-dialog' });
+  function showRule(r) {
+    const decided = decideFill(info, selected);
+    const rows = [];
+    info.txns.forEach((t, i) => {
+      if (!t.matched.includes(r.id)) return;
+      const d = decided[i];
+      const outcome = d === null ? 'not filled (no ticked rule matches)' : d.id === r.id ? 'filled by this rule'
+        : `${d.category} (rule ${d.id} decides)`;
+      rows.push([t.date, t.account_name, t.memo, t.payee, money(t.amount), outcome]);
+    });
+    dialog.replaceChildren(
+      h('div', { class: 'dialog-head' }, h('h2', { text: `Rule ${r.id}: ${r.text}` }),
+        h('span', { class: 'muted small', text: `→ ${r.category}` }), h('span', { class: 'spacer' }),
+        h('button', { type: 'button', class: 'primary', onclick: () => dialog.close() }, 'Close')),
+      h('p', { class: 'small muted', text: `The ${rows.length} transaction(s) without a category that this rule matches (${r.field}` +
+        `${r.regex ? ', regular expression' : ', contains'}${r.case_sensitive ? ', case-sensitive' : ', ignoring case'}).` }),
+      dataTable(['date', 'account', 'description', 'payee', 'amount', 'with_your_selection'], rows,
+        { pageSize: 200, rowClass: row => (row[5] === 'filled by this rule' ? null : 'warn-row') }));
+    if (!dialog.open) dialog.showModal();
+  }
+
+  const body = info.rules.map(r => {
+    const tr = h('tr');
+    const box = h('input', { type: 'checkbox', onchange: e => {
+      e.target.checked ? selected.add(r.id) : selected.delete(r.id);
+      tr.classList.toggle('approved', e.target.checked);
+      update();
+    } });
+    boxes.push({ box, id: r.id, tr });
+    fillCells[r.id] = h('td', { class: 'num' });
+    tr.append(h('td', {}, box), h('td', { class: 'num muted', text: r.position }),
+      h('td', {}, h('span', { class: 'mono', text: r.text }), r.regex ? h('span', { class: 'pill', text: 'regex' }) : null),
+      h('td', { text: r.field }), h('td', { text: r.category }),
+      h('td', {}, r.overwrite ? h('span', { class: 'pill warn', text: 'overwrite', title: 'On a transaction without a category it simply sets it; the last matching overwrite rule wins.' }) : 'set if empty'),
+      h('td', { class: 'num', text: r.matches }), fillCells[r.id],
+      h('td', {}, r.matches ? h('button', { type: 'button', class: 'compact', onclick: () => showRule(r) }, 'View') : null));
+    return tr;
+  });
+  update();
+
+  fillBtn.addEventListener('click', () => {
+    const n = Number(fillBtn.dataset.count);
+    if (!confirm(`Fill ${n} empty categor${n === 1 ? 'y' : 'ies'} in a NEW copy of your HomeBank file?\nYour original file will not be changed.`)) return;
+    busy(fillBtn, 'Filling', async () => {
+      const res = await api('/api/fill/apply', { rules: [...selected], sha256: info.sha256 });
+      result.replaceChildren(summaryView(res.summary));
+      result.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+
+  const leftOut = Object.entries(info.left_out_rules);
+  main(
+    h('h1', { text: 'Fill empty categories' }),
+    h('p', { class: 'lead', text: 'Apply the rules you tick to every transaction without a category, in all accounts at once. ' +
+      'Only empty categories are filled; categories you set, payees, tags and amounts are never changed. The result is a NEW copy of your file.' }),
+    facts,
+    leftOut.length ? h('div', { class: 'notice warn', text: `Left out: ${leftOut.map(([why, n]) => `${n} rule(s): ${why}`).join('; ')}.` }) : null,
+    info.closed_skipped ? h('p', { class: 'small muted', text: `${info.closed_skipped} transaction(s) without a category in closed accounts are left alone (HomeBank does not assign there either).` }) : null,
+    h('div', { class: 'card' },
+      h('h2', { text: 'Your rules' }),
+      h('p', { class: 'small muted', text: 'In HomeBank\'s order. When several ticked rules match one transaction, HomeBank\'s choice is used: the first "set if empty" rule, or the last "overwrite" rule. ' +
+        'View shows the transactions a rule matches and which rule fills each.' }),
+      h('div', { class: 'toolbar' }, h('button', { type: 'button', onclick: () => setAll(true) }, 'Select all'),
+        h('button', { type: 'button', onclick: () => setAll(false) }, 'Clear'), counter),
+      info.rules.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
+        h('thead', {}, h('tr', {}, h('th', {}, allBox),
+          ['#', 'Rule text', 'Field', 'Category', 'Action', 'Matches empty', 'Would fill', ''].map(t => h('th', { text: t })))),
+        h('tbody', {}, body))) : h('p', { class: 'muted', text: 'Your file has no rules that set a category.' })),
+    h('div', { class: 'toolbar' }, h('span', { class: 'spacer' }), fillBtn),
+    result, dialog);
+}
+
 // --- transfers ---------------------------------------------------------------------------------------------
 
 function money(v) { return Number(v).toFixed(2); }
@@ -1094,7 +1224,7 @@ async function viewExport() {
 
 // --- navigation ---------------------------------------------------------------------------------------------
 
-const VIEWS = { file: viewFile, analyse: viewAnalyse, review: viewReview, imports: viewImports, transfers: viewTransfers,
+const VIEWS = { file: viewFile, analyse: viewAnalyse, review: viewReview, fill: viewFill, imports: viewImports, transfers: viewTransfers,
   reports: viewReports, results: viewResults, export: viewExport };
 
 function updateHeader() {

@@ -119,3 +119,42 @@ class FillTests(TempDirTestCase):
             self.fill(["E1"], expected_sha256="0" * 64)
         with self.assertRaises(HbkitError):
             fill_categories(self.book, ["E1"], self.src, self.src)
+
+
+class CommandTests(TempDirTestCase):
+    def test_list_review_and_fill(self):
+        import csv
+
+        from .helpers import run_cli
+
+        src = self.write_sample("finances.xhb", uncategorised=0.3)
+        out = self.tmp / "out"
+        code, stdout, err = run_cli("fill-categories", "--file", str(src), "--out", str(out))
+        self.assertEqual(code, 0, err)
+        folder = next((out / "fill-categories").iterdir())
+        with open(folder / "rules.csv", encoding="utf-8-sig", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        self.assertEqual([r["rule_id"] for r in rows], ["E1", "E2", "E3", "E4", "E5", "E6", "E8", "E9"])
+        for r in rows:
+            r["approve"] = "y" if r["rule_id"] in ("E1", "E4") else ""
+        with open(folder / "rules.csv", "w", encoding="utf-8-sig", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=list(rows[0]))
+            w.writeheader()
+            w.writerows(rows)
+        code, stdout, err = run_cli("fill-categories", "--file", str(src), "--out", str(out), "--review", str(folder))
+        self.assertEqual(code, 0, err)
+        self.assertIn("Categories filled", stdout)
+        new = read_bytes(next(out.glob("with-categories_*.xhb")).read_bytes())
+        old = read_bytes(src.read_bytes())
+        changed = [(a, b) for a, b in zip(old.transactions, new.transactions) if a.category_key != b.category_key]
+        expected = sum(int(r["fills_if_all_approved"]) for r in rows if r["rule_id"] in ("E1", "E4"))
+        self.assertEqual(len(changed), expected)
+        self.assertTrue(all(a.category_key == 0 for a, _ in changed))
+
+    def test_privacy(self):
+        from .helpers import run_cli
+
+        src = self.write_sample("s.xhb", uncategorised=0.3, sentinel=True)
+        code, stdout, err = run_cli("fill-categories", "--file", str(src), "--out", str(self.tmp / "out"))
+        self.assertEqual(code, 0, err)
+        self.assertNoSentinel(stdout, err)

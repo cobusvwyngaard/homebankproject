@@ -666,6 +666,50 @@ def api_transfers_link(state: UiState, q: dict, body: Any) -> dict:
     return {"summary": summary.to_dict(), "output": str(output) if output else None}
 
 
+# --- fill empty categories --------------------------------------------------------------------------
+
+
+def api_fill(state: UiState, q: dict, body: Any) -> dict:
+    from ..rules.fill import plan_fill
+    from ..xhb import format as F
+
+    with state.lock:
+        book = state.book()
+        plan = plan_fill(book)
+    matches = plan.matches()
+    return {
+        "sha256": plan.source_sha256,
+        "closed_skipped": plan.closed_skipped,
+        "left_out_rules": dict(plan.left_out_rules),
+        "rules": [{
+            "id": r.id, "position": plan.positions[r.id], "text": r.search,
+            "field": F.RULE_FIELD_NAMES.get(r.match_field, ""), "regex": bool(r.flags & F.ASGF_REGEX),
+            "case_sensitive": bool(r.flags & F.ASGF_EXACT), "set": bool(r.flags & F.ASGF_DOCAT),
+            "overwrite": bool(r.flags & F.ASGF_OVWCAT), "category": book.category_path(r.category_key) or "",
+            "matches": matches.get(r.id, 0),
+        } for r in plan.rules],
+        "txns": [{
+            "date": t.date.isoformat(), "account_name": book.account_name(t.account_key) or "", "memo": t.memo,
+            "payee": book.payee_name(t.payee_key) or "", "amount": t.amount,
+            "matched": [plan.rules[ri].id for ri in rule_ids],
+        } for t, rule_ids in zip(plan.txns, plan.matched) if rule_ids],
+        "without_category": len(plan.txns),
+    }
+
+
+def api_fill_apply(state: UiState, q: dict, body: Any) -> dict:
+    from ..rules.fill import default_output, fill_categories
+
+    rules = body.get("rules")
+    if not isinstance(rules, list) or not all(isinstance(x, str) for x in rules):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "rules must be a list of rule ids")
+    with state.lock:
+        book = state.book()
+        summary, output = fill_categories(book, rules, state.input_path, default_output(state.out_root),
+                                          str(body.get("sha256") or "") or None)
+    return {"summary": summary.to_dict(), "output": str(output) if output else None}
+
+
 def api_open(state: UiState, q: dict, body: Any) -> dict:
     """Show a results folder in Windows Explorer, or open a report page in the browser."""
     target = state.inside_out(str(body.get("path", "")))
@@ -707,6 +751,8 @@ ROUTES = {
     ("POST", "/api/import/prepare"): api_import_prepare,
     ("GET", "/api/transfers"): api_transfers,
     ("POST", "/api/transfers/link"): api_transfers_link,
+    ("GET", "/api/fill"): api_fill,
+    ("POST", "/api/fill/apply"): api_fill_apply,
 }
 
 

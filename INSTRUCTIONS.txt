@@ -91,6 +91,8 @@ Then, in the browser: 2. Analyse > rule-mining > Run, and
 3. Rule review to go through the suggested rules. Your original
 HomeBank file is never changed: approved rules are written to a NEW
 copy in data\out.
+Fill categories then applies the rules you tick to every transaction
+that has no category yet, again in a NEW copy.
 
 Each month, the Imports page prepares the files you download from your
 banks (QIF or HomeBank CSV): choose the month, add the files, check the

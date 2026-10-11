@@ -9,6 +9,8 @@ A small program that runs on your own computer and analyses your HomeBank file
   HomeBank rules from how you categorised your transactions in the past;
 * add the rules you approve to a **new copy** of your file. Your original file is
   never changed;
+* **fill empty categories** with the rules you choose, in all accounts at once, again in
+  a new copy;
 * **prepare the files you download from your banks** (QIF or HomeBank CSV) before you
   import them: it fills in categories from each account's own history — something
   HomeBank's rules cannot do — and remembers which file belongs to which account;
@@ -167,16 +169,18 @@ The pages, from left to right:
    * Other tabs show your existing rules with their scores, inconsistent descriptions,
      descriptions whose category **depends on the account**, overlapping rules, the
      back-test and the suggestions that were set aside.
-4. **Imports** — prepare the files from your banks before you import them in HomeBank:
+4. **Fill categories** — apply the rules you tick to every transaction without a
+   category, in all accounts at once. See [Filling empty categories](#filling-empty-categories).
+5. **Imports** — prepare the files from your banks before you import them in HomeBank:
    choose the month, add the files, check the account each one is linked to, then
    *Prepare…* to see and edit the categories and save the prepared copy. See
    [Preparing bank files for import](#preparing-bank-files-for-import).
-5. **Transfers** — after importing, link transfers between your own accounts that
+6. **Transfers** — after importing, link transfers between your own accounts that
    arrived as two separate transactions. See [Linking transfers](#linking-transfers).
-6. **Reports** — make a report (choose the years and options), then *Open report*. It
+7. **Reports** — make a report (choose the years and options), then *Open report*. It
    also shows which settings file is used, and lists the reports you made before.
-7. **Results** — every result file of every analysis run, as sortable tables.
-8. **Export** — create the SQLite database.
+8. **Results** — every result file of every analysis run, as sortable tables.
+9. **Export** — create the SQLite database.
 
 *Show folder* buttons open the results folder in Windows Explorer.
 
@@ -381,10 +385,44 @@ it:
      it is empty.
    * Approved rows are skipped, and counted on screen, when the category no longer
      exists, the same rule already exists, or the row is approved twice.
-5. Open the new copy in HomeBank and check the rules under *Manage → Assignments…*. To
-   try them, use *Auto. assignments* in an account window.
+5. Open the new copy in HomeBank and check the rules under *Manage → Assignments…*.
 6. When you are happy: close HomeBank, keep a backup of your original file, then put the
    new copy in its place (rename it to your file's name).
+7. To give your existing transactions without a category one from the new rules, use
+   [Filling empty categories](#filling-empty-categories) on that file.
+
+---
+
+## Filling empty categories
+
+HomeBank's own *Auto. assignments* (in an account window) works one account at a time,
+runs **all** your rules — an "overwrite category" rule also replaces categories you set
+by hand, anywhere in that account's history — and shows no preview. The **Fill
+categories** page does it more carefully:
+
+* It only looks at transactions **without a category** (not void, split or transfers, and
+  not in closed accounts, where HomeBank does not assign either), in all accounts at once.
+* It lists the rules in your file that set a category, in HomeBank's order, with how many
+  of those transactions each one matches. Rules whose category no longer exists, or whose
+  regular expression is invalid, are left out (and counted).
+* **Nothing is ticked to start with.** Tick the rules to apply, or *Select all*. The page
+  shows at once how many categories your selection would fill. When several ticked rules
+  match the same transaction, HomeBank's choice is used: the first "set if empty" rule,
+  or the last "overwrite" rule. A rule that another rule always beats shows "decided by
+  another rule".
+* **View** lists the transactions a rule matches and which rule fills each with your
+  selection, so you can check them before filling.
+* **Fill in a new copy…** writes `data\out\with-categories_<date_time>.xhb`. Only the
+  empty category fields change: categories you set, payees, payment modes, tags and
+  amounts stay exactly as they were. The copy is checked before it is saved, and your
+  original file is not changed.
+
+Open the copy in HomeBank, check it, and use it as your file once you are happy (keep the
+original as a backup).
+
+From PowerShell: `.\hb fill-categories` writes `rules.csv` and `transactions.csv` to
+`data\out\fill-categories\<date_time>\`. Put `y` in the *approve* column of the rules to
+apply, save, and run `.\hb fill-categories --review "<that folder>"`.
 
 ---
 
@@ -654,6 +692,7 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 | A report says some names were not found | Check the spelling against HomeBank (capitals do not matter); see the list at the top of the report. |
 | `this is neither a QIF file nor a HomeBank CSV file` | The toolkit reads QIF and HomeBank's 8-column CSV only. Download that format from your bank, or ask Claude to add the bank's layout (describe the columns; do not send a real file). |
 | `could not tell which account this file belongs to` | Give it with `--account "name as in HomeBank"`, or choose it on the Imports page. |
+| `the HomeBank file has changed since the rules were listed` | Reload the Fill categories page (or run `fill-categories` without `--review`) and choose again. |
 | `the HomeBank file has changed since the transfers were listed` | List the transfers again (*Find again* on the Transfers page, or run `link-transfers` without `--review`). |
 | `import-accounts.json in the data folder could not be read` | It was damaged (e.g. edited by hand). Rename it; a new import record is started. |
 

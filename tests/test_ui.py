@@ -476,3 +476,32 @@ class TransferPageTests(ServerTestCase):
         self.assertIn("has changed", res["error"])
         res = self.api("/api/transfers/link", {"sha256": info["sha256"], "pairs": []})
         self.assertIsNone(res["output"])
+
+
+class FillPageTests(ServerTestCase):
+    def setUp(self):
+        super().setUp()
+        self.src.write_bytes(sample(uncategorised=0.3).data)
+
+    def test_list_and_fill(self):
+        info = self.api("/api/fill")
+        self.assertEqual([r["id"] for r in info["rules"]], ["E1", "E2", "E3", "E4", "E5", "E6", "E8", "E9"])
+        rule = {r["id"]: r for r in info["rules"]}
+        self.assertTrue(rule["E9"]["overwrite"] and rule["E6"]["regex"])
+        self.assertEqual(rule["E8"]["field"], "payee")
+        self.assertEqual(sum(1 for t in info["txns"] if "E4" in t["matched"]), rule["E4"]["matches"])
+        before = self.src.read_bytes()
+        res = self.api("/api/fill/apply", {"rules": ["E4"], "sha256": info["sha256"]})
+        self.assertEqual(self.src.read_bytes(), before)
+        new = read_bytes(Path(res["output"]).read_bytes())
+        filled = [t for t, o in zip(new.transactions, read_bytes(before).transactions) if t.category_key != o.category_key]
+        self.assertEqual(len(filled), rule["E4"]["matches"])
+        self.assertEqual({new.category_path(t.category_key) for t in filled}, {"Communication:Cellphone"})
+
+    def test_bad_requests(self):
+        self.assertEqual(self.request("POST", "/api/fill/apply", {"rules": "E1"})[0], 400)
+        self.assertEqual(self.request("POST", "/api/fill/apply", {"rules": [1]})[0], 400)
+        status, res, _ = self.request("POST", "/api/fill/apply", {"rules": ["E1"], "sha256": "0" * 64})
+        self.assertEqual(status, 400)
+        self.assertIn("has changed", res["error"])
+        self.assertIsNone(self.api("/api/fill/apply", {"rules": []})["output"])

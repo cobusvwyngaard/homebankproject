@@ -93,6 +93,7 @@ hbkit/export/sqlite.py       SQLite export; schema documented in docs/sqlite-sch
 hbkit/rules/engine.py        simulator of HomeBank's rule application
 hbkit/rules/normalise.py     cleaning of bank descriptions
 hbkit/rules/mining.py        rule mining, back-test, existing-rule scores, overlaps
+hbkit/rules/fill.py          fill empty categories with chosen rules (HomeBank's order) in a new copy
 hbkit/analyses/              one module per analysis (ANALYSIS = ...), auto-discovered
 hbkit/reports/               reporting layer: settings.py (TOML), data.py (r_* views, periods,
                              balances), base.py (Report plugins, runner), html.py (page, charts);
@@ -138,7 +139,10 @@ HomeBank CSV file before import; record of file names and accounts in the data f
 import code plus the owner's description of their two banks' layouts — never put real
 statement lines in tests or docs), transfer linking after import (Transfers page and
 `link-transfers`; owner decisions: 4 days apart by default, pairs start unticked with a
-select-all, transactions without another side are only listed, never created), and the
+select-all, transactions without another side are only listed, never created), filling
+empty categories with chosen rules (Fill categories page and `fill-categories`; only empty
+categories in open accounts, rules unticked with a select-all, only the category attribute
+is written), and the
 reporting layer (settings,
 `r_*` views, report framework) with three reports: annual-overview, category-trends,
 tax-year-statement (also on the Reports page of the browser interface). The owner is a

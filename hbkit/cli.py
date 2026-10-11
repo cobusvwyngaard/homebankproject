@@ -242,6 +242,73 @@ def cmd_link_transfers(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fill_categories(args: argparse.Namespace) -> int:
+    import json
+
+    from .analyses.base import write_csv, write_json
+    from .analyses.rule_mining import APPROVED, read_review
+    from .privacy import new_run_dir
+    from .rules.fill import default_output, fill_categories, plan_fill
+    from .xhb import format as F
+    from .xhb.reader import read_file
+
+    input_path = _input_path(args)
+    book = read_file(input_path)
+    term = Terminal(book.sensitive_strings())
+    if args.review:
+        review = Path(args.review)
+        if review.is_dir():
+            review = review / "rules.csv"
+        if not review.is_file():
+            raise HbkitError("rules.csv was not found (give the file or the folder that contains it)")
+        rows = read_review(review, ("approve", "rule_id"))
+        meta_path = review.parent / "summary.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {}
+        chosen = [r["rule_id"] for r in rows if r.get("approve", "").strip().lower() in APPROVED]
+        summary, _ = fill_categories(book, chosen, input_path,
+                                     Path(args.output) if args.output else default_output(Path(args.out)),
+                                     meta.get("source_sha256"))
+        term.summary(summary)
+        return 0
+
+    plan = plan_fill(book)
+    everything = plan.decide({r.id for r in plan.rules})
+    matches = plan.matches()
+    filled_by: dict[str, int] = {}
+    for rule, _ in everything.values():
+        filled_by[rule.id] = filled_by.get(rule.id, 0) + 1
+    folder = new_run_dir(Path(args.out), "fill-categories")
+    write_csv(folder / "rules.csv", ["approve", "rule_id", "position", "rule_text", "field", "action", "category",
+                                     "matches_empty", "fills_if_all_approved"], (
+        ["", r.id, plan.positions[r.id], r.search, F.RULE_FIELD_NAMES.get(r.match_field, ""),
+         "overwrite" if r.flags & F.ASGF_OVWCAT else "set if empty", book.category_path(r.category_key),
+         matches.get(r.id, 0), filled_by.get(r.id, 0)]
+        for r in plan.rules))
+    write_csv(folder / "transactions.csv", ["date", "account", "memo", "payee", "amount", "matching_rules",
+                                            "filled_by_if_all_approved", "category_if_all_approved"], (
+        [t.date, book.account_name(t.account_key), t.memo, book.payee_name(t.payee_key) or "", t.amount,
+         " ".join(plan.rules[ri].id for ri in rule_ids),
+         everything[i][0].id if i in everything else "",
+         book.category_path(everything[i][1]) if i in everything else ""]
+        for i, (t, rule_ids) in enumerate(zip(plan.txns, plan.matched)) if rule_ids))
+    write_json(folder / "summary.json", {"source_sha256": plan.source_sha256, "without_category": len(plan.txns),
+                                         "rules": len(plan.rules), "fills_if_all_approved": len(everything)})
+    s = Summary("Fill empty categories")
+    s.count("Transactions without a category (open accounts)", len(plan.txns))
+    if plan.closed_skipped:
+        s.count("  left alone in closed accounts", plan.closed_skipped)
+    s.count("Rules that can set a category", len(plan.rules))
+    for reason, n in sorted(plan.left_out_rules.items()):
+        s.count(f"  left out: {reason}", n)
+    s.count("Would be filled if all rules are approved", len(everything))
+    s.output("Folder", folder)
+    s.note("Next: put y in the approve column of rules.csv for the rules to apply, save, then run", terminal_only=True)
+    s.note("python -m hbkit fill-categories --review <that folder>", terminal_only=True)
+    s.note("(or use the Fill categories page of the browser interface: python -m hbkit ui)", terminal_only=True)
+    term.summary(s)
+    return 0
+
+
 def cmd_generate_sample(args: argparse.Namespace) -> int:
     from .fixtures.generator import GeneratorOptions, generate
 
@@ -250,7 +317,8 @@ def cmd_generate_sample(args: argparse.Namespace) -> int:
         raise HbkitError("the output file already exists; choose another --output or add --overwrite")
     opts = GeneratorOptions(seed=args.seed, start_year=args.start_year, years=args.years,
                             sentinel=args.sentinel, reporting=args.reporting,
-                            home_loans=args.home_loans, unlinked_transfers=args.unlinked_transfers)
+                            home_loans=args.home_loans, unlinked_transfers=args.unlinked_transfers,
+                            uncategorised=args.uncategorised)
     gen = generate(opts)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(gen.data)
@@ -464,6 +532,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--data", metavar="FOLDER", default=str(DATA_DIR), help=argparse.SUPPRESS)
     p.set_defaults(handler=cmd_prepare_import)
 
+    p = sub.add_parser("fill-categories",
+                       help="fill empty categories with the rules you choose, in a NEW copy of your HomeBank file")
+    _add_file_option(p)
+    _add_out_option(p)
+    p.add_argument("--review", metavar="PATH",
+                   help="apply the rules approved in rules.csv (or the folder that contains it)")
+    p.add_argument("--output", metavar="PATH", help="name of the new copy (default: data/out/with-categories_<date>.xhb)")
+    p.set_defaults(handler=cmd_fill_categories)
+
     p = sub.add_parser("link-transfers",
                        help="find transfers between your accounts that arrived as two transactions, and link them "
                             "in a NEW copy of your HomeBank file")
@@ -488,6 +565,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--home-loans", action="store_true",
                    help="add two home loans whose transactions are categorised by account "
                         "(to try account rules in rule mining)")
+    p.add_argument("--uncategorised", type=float, default=0.0, metavar="SHARE",
+                   help="leave this share of transactions without a category, e.g. 0.3 (to try fill-categories)")
     p.add_argument("--unlinked-transfers", action="store_true",
                    help="add transfers whose two sides are not linked yet (to try link-transfers)")
     p.add_argument("--sentinel", action="store_true", help=argparse.SUPPRESS)
