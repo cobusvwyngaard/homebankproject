@@ -2,6 +2,7 @@
 
 import csv
 import http.client
+import importlib.util
 import json
 import threading
 from pathlib import Path
@@ -219,3 +220,62 @@ class CommandTests(TempDirTestCase):
 
         args = build_parser().parse_args(["ui", "--no-browser", "--port", "0"])
         self.assertTrue(args.no_browser)
+
+
+class ReportsApiTests(ServerTestCase):
+    def setUp(self):
+        super().setUp()
+        from hbkit.fixtures.generator import write_cpi
+
+        self.src.write_bytes(sample(reporting=True).data)
+        write_cpi(self.tmp / "cpi.csv")
+        settings = self.tmp / "settings.toml"
+        settings.write_text('[period]\nyear_mode = "tax"\n[accounts]\nexclude = ["Business account"]\n'
+                            '[groups."tax: medical"]\ncategories = ["Medical"]\n[inflation]\ncpi_file = "cpi.csv"\n',
+                            encoding="utf-8")
+        self.state.settings_path = settings
+
+    def test_list_and_settings(self):
+        info = self.api("/api/reports")
+        self.assertEqual({r["name"] for r in info["reports"]},
+                         {"annual-overview", "category-trends", "tax-year-statement"})
+        self.assertEqual(info["settings"]["year_mode"], "tax")
+        self.assertEqual(info["settings"]["groups"], ["tax: medical"])
+        self.assertTrue(info["settings"]["cpi_file"].endswith("cpi.csv"))
+        self.assertEqual(info["files"], [])
+
+    def test_run_and_open(self):
+        if not importlib.util.find_spec("plotly"):
+            self.skipTest("Plotly is not installed")
+        res = self.api("/api/report/run", {"report": "tax-year-statement", "year": "2025", "params": {"groups": ""}})
+        self.assertTrue(res["output"].endswith(".html"))
+        self.assertIn("Report", [r["label"] for r in res["summary"]["rows"]])
+        res2 = self.api("/api/report/run", {"report": "annual-overview", "from": "2023", "to": ""})
+        self.assertIn("annual-overview_2022-23_to_", res2["output"])
+        self.assertEqual(len(self.api("/api/reports")["files"]), 2)
+        self.api("/api/open", {"path": res["output"], "file": True})
+        self.assertEqual(self.opened, [Path(res["output"])])
+
+    def test_bad_requests(self):
+        self.assertEqual(self.request("POST", "/api/report/run", {"report": "nope"})[0], 404)
+        status, data, _ = self.request("POST", "/api/report/run", {"report": "annual-overview", "year": "abc"})
+        self.assertEqual(status, 400)
+        # only report pages and CSV files can be opened, and only inside the output folder
+        (self.out).mkdir(parents=True, exist_ok=True)
+        (self.out / "x.txt").write_text("x")
+        self.assertEqual(self.request("POST", "/api/open", {"path": "x.txt", "file": True})[0], 404)
+        self.assertEqual(self.request("POST", "/api/open", {"path": str(self.src), "file": True})[0], 403)
+        self.assertEqual(self.opened, [])
+
+    def test_settings_problem_is_reported(self):
+        self.state.settings_path.write_text("[period\n", encoding="utf-8")
+        info = self.api("/api/reports")
+        self.assertIn("not valid TOML", info["settings"]["error"])
+
+    def test_export_includes_report_views(self):
+        import sqlite3
+
+        self.api("/api/export-sqlite", {})
+        conn = sqlite3.connect(self.out / "homebank.sqlite")
+        self.assertGreater(conn.execute("SELECT COUNT(*) FROM r_period_totals").fetchone()[0], 0)
+        conn.close()

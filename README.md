@@ -8,10 +8,16 @@ A small program that runs on your own computer and analyses your HomeBank file
 * run **analyses** — today: an overview, and **assignment-rule mining**, which suggests
   HomeBank rules from how you categorised your transactions in the past;
 * add the rules you approve to a **new copy** of your file. Your original file is
-  never changed.
+  never changed;
+* make **reports** — an annual overview, category trends (with inflation) and a tax-year
+  statement — as pages that open in your browser and work offline.
+
+HomeBank stays your system of record: for analyses and reports the toolkit only *reads*
+your file.
 
 You can use it in your **web browser** (easiest) or by typing commands in PowerShell.
-It needs only Python; nothing else is installed.
+It needs only Python. The reports also use one chart library (Plotly), which is included
+in the project and installs without internet.
 
 ---
 
@@ -25,7 +31,9 @@ It needs only Python; nothing else is installed.
 * **In PowerShell you only see counts and percentages** — never memos, payee, category
   or account names, or amounts. (One exception you have to ask for: the option
   `--show-categories` of rule mining shows your category names.)
-* **Detailed results go into the `data\out` folder**, as CSV files you can open in Excel.
+* **Detailed results go into the `data\out` folder**, as CSV files you can open in Excel,
+  and reports go into `data\out\reports`. Report pages contain your data and open from
+  your own disk; they load nothing from the internet.
 * The `data` folder is excluded from Git, so your file and results are never uploaded
   to GitHub, even by accident.
 * Claude (the AI that built this toolkit) never sees your file. It built and tested
@@ -95,6 +103,17 @@ automatically. Otherwise, name the file with `--file "path\to\file.xhb"`.
 
 When you have made new entries in HomeBank, copy the file again before running analyses.
 
+### 5. Install the report library (once, no internet needed)
+
+The reports draw their charts with Plotly. Its install files are included in the
+project (folder `vendor\wheels`), so this works offline:
+
+```powershell
+.venv\Scripts\python -m pip install --no-index --find-links vendor\wheels -r requirements.txt
+```
+
+Run the tests again afterwards; the report tests, which were skipped before, now run too.
+
 ---
 
 ## The browser interface (easiest)
@@ -122,8 +141,10 @@ The pages, from left to right:
    keeps your ticks for later. Other tabs show your existing rules with their scores,
    inconsistent descriptions, overlapping rules, the back-test and the suggestions that
    were set aside.
-4. **Results** — every result file of every run, as sortable tables.
-5. **Export** — create the SQLite database.
+4. **Reports** — make a report (choose the years and options), then *Open report*. It
+   also shows which settings file is used, and lists the reports you made before.
+5. **Results** — every result file of every analysis run, as sortable tables.
+6. **Export** — create the SQLite database.
 
 *Show folder* buttons open the results folder in Windows Explorer.
 
@@ -149,6 +170,14 @@ see its options, e.g. `.\hb run rule-mining --help`.
 .\hb generate-sample
 .\hb structure --file data\out\sample.xhb
 .\hb run rule-mining --file data\out\sample.xhb
+```
+
+And for the reports (a fake file with rental and medical data, plus a fake CPI table and
+a sample settings file):
+
+```powershell
+.\hb generate-sample --reporting --output data\out\sample-rep.xhb
+.\hb report run category-trends --file data\out\sample-rep.xhb --settings data\out\sample-rep-settings.toml
 ```
 
 ### `structure` — check that the toolkit understands your file
@@ -296,6 +325,115 @@ it:
 
 ---
 
+## Reports
+
+Reports are single web pages (with a CSV file where useful) saved in
+`data\out\reports\`. Every report shows at the top its parameters, the year mode, the
+date range of the data in your file, the settings used, and when it was made.
+
+Make them on the *Reports* page of the browser interface, or with commands:
+
+```powershell
+.\hb report list
+.\hb report run annual-overview                      # all years
+.\hb report run annual-overview --from 2022 --to 2025
+.\hb report run category-trends --year 2025
+.\hb report run tax-year-statement --year 2026       # tax year 2025/26
+.\hb report run tax-year-statement --year 2026 --groups "tax: medical"
+```
+
+### Settings: years, accounts, groups and inflation
+
+The reports read their settings from **`data\settings.toml`** (private, like your HomeBank
+file). To start, copy the example and edit it in Notepad:
+
+```powershell
+Copy-Item settings.example.toml data\settings.toml
+notepad data\settings.toml
+```
+
+The example file explains every setting. In short:
+
+* **`[period] year_mode`** — `"calendar"` (January–December) or `"tax"` (the SA tax year,
+  1 March to the end of February). A tax year is shown as `2025/26` and chosen with
+  `--year 2026`, the year in which it ends (SARS's "2026 year of assessment").
+* **`[accounts] exclude`** — accounts to leave out of every report, by name. Transfers to
+  or from them are left out too.
+* **`[groups."…"]`** — category groups, each with `categories` (a top-level category
+  includes its subcategories) and/or `tags`. Groups whose name starts with `tax:` make up
+  the tax-year statement; all groups appear in category trends.
+* **`[inflation] cpi_file`** — optional, for amounts in today's prices: a CSV file with
+  two columns, `month` and `index`, e.g.
+
+  ```
+  month,index
+  2024-01,113.0
+  2024-02,114.2
+  ```
+
+  Use the headline consumer price index published monthly by Stats SA
+  (<https://www.statssa.gov.za>, publication P0141, *Consumer Price Index*); copy the
+  monthly index values into Excel with these two columns and save as CSV. Only the ratios
+  between months matter, so the index's base year does not. Put the file next to the
+  settings file (e.g. `data\cpi.csv`) and write `cpi_file = "cpi.csv"`.
+* **`[reports] min_yearly_spend`** — category trends only flags categories that spend at
+  least this much a year on average (default R1 000).
+
+If a name in the settings does not exist in your HomeBank file, the report still runs; it
+counts the problem on screen and lists it at the top of the report.
+
+### How amounts are counted (the same in every report)
+
+* **Split transactions** are counted per split line, each in its own category.
+* **Transfers between your own accounts** are neither income nor expense. Transfers to or
+  from an excluded account are left out entirely.
+* **Income** is money in an income category (and uncategorised money in). Everything else
+  is an **expense**, so a refund in an expense category reduces that category's spending.
+* **Void transactions** and **excluded accounts** are left out.
+* A year that is not complete in your file is marked **(partial)**.
+
+### annual-overview
+
+Per year: income, expenses, net savings and savings rate (tiles for the latest year,
+charts, and a table); the total balance of your accounts over time, the larger accounts
+one by one, and every account's balance at each year end; and the top 10 expense
+categories with the change against the year before. A year still in progress is compared
+with the same months of the year before. Option: `--top N`.
+
+### category-trends
+
+Spending per category (and per category group) for every year: a stacked chart, a chart
+where you pick one category or group, and tables (subcategories can be shown). With a CPI
+table, a switch shows amounts in today's prices, and categories growing faster than
+inflation are highlighted — average yearly growth between the first and last complete
+years, at least 1 percentage point a year above inflation (change with
+`--inflation-margin`). Without a CPI table the amounts are nominal and nothing is flagged.
+
+### tax-year-statement
+
+One tax year (default: the latest that has ended), always in tax years whatever the year
+mode. For each `tax:` group (or the groups given with `--groups`): a summary by category,
+then every transaction — date, payee, memo, category, amount — with money in, money out
+and net subtotals. A summary of all groups comes first. It prints neatly on A4 (each group
+on a new page; use the *Print* button or Ctrl+P, and "Save as PDF" if you want a PDF), and
+the same content is saved as a CSV file next to it. The statement warns when your file
+does not cover the whole tax year yet.
+
+### Asking Claude for a new report
+
+Like analyses, a report is one new file plus its tests. Describe what you want to see,
+the charts and tables, the years (one year or a range) and any options. For example:
+
+> Add a report "monthly-cash-flow" to the HomeBank toolkit: for a chosen year, money in
+> and out per month as bars, and a Sankey diagram from income categories to expense
+> category groups. Option: show the top N categories separately.
+
+Reports already discussed for later: **recurring-commitments**, **monthly-cash-flow**
+(with Sankey) and **data-quality**. Claude builds and tests them with made-up data only;
+you then update your copy and run them on your own file.
+
+---
+
 ## Asking Claude for a new analysis
 
 The toolkit is built so that a new analysis is one new file plus its tests. To ask for
@@ -332,6 +470,10 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 | `.\hb` does nothing / `.venv` missing | Do step 3 of the set-up again. |
 | The browser says "missing or wrong key" | Use the full address shown in the black window (it ends in `#token=…`); the key changes each time the toolkit starts. |
 | The browser page stops responding | The black window was closed. Start `hb-ui.cmd` again. |
+| `the reports need Plotly, which is not installed yet` | Do step 5 of the set-up (no internet needed). |
+| `the settings file is not valid TOML (… line N …)` | Check that line in `data\settings.toml`: text in "double quotes", lists in [ ], one setting per line. |
+| `the CPI file named in the settings was not found` | Put the CSV next to `settings.toml`, or give its full path. |
+| A report says some names were not found | Check the spelling against HomeBank (capitals do not matter); see the list at the top of the report. |
 
 ---
 
@@ -339,6 +481,11 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 
 * Python 3.13, standard library only; tests: `.venv\Scripts\python -m unittest discover -s tests -t .`
 * The `.xhb` format as learnt from HomeBank's source code: [docs/xhb-format.md](docs/xhb-format.md)
+* The SQLite tables and views, including the shared report views (`r_lines`, `r_flows`,
+  `r_group_lines`, `r_category_period`, `r_period_totals`): [docs/sqlite-schema.md](docs/sqlite-schema.md).
+  With a settings file, `export-sqlite` adds those report views to `homebank.sqlite` too.
+* How to add an analysis or a report: [docs/adding-an-analysis.md](docs/adding-an-analysis.md),
+  [docs/adding-a-report.md](docs/adding-a-report.md)
 * The reader copies the original file's bytes exactly, and the writer splices changes
   into a copy. An unchanged file therefore comes back byte for byte, and an edited copy
   differs only in the intended lines; both are checked by the tests and again before

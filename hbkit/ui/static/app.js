@@ -443,6 +443,75 @@ async function suggestedRules(run) {
     result);
 }
 
+// --- reports -----------------------------------------------------------------------------------------------
+
+const INSTALL_CMD = '.venv\\Scripts\\python -m pip install --no-index --find-links vendor\\wheels -r requirements.txt';
+
+async function openReport(path) {
+  try { await api('/api/open', { path, file: true }); } catch (err) { toast(err.message, true); }
+}
+
+async function viewReports() {
+  if (!app.status || !app.status.selected) { await needFile(); return; }
+  const info = await api('/api/reports');
+  const st = info.settings;
+  const tax = st && st.year_mode === 'tax';
+  const parts = [
+    h('h1', { text: 'Reports' }),
+    h('p', { class: 'lead', text: 'Each report is one page saved in the reports folder. It opens in your browser, works offline and can be printed.' }),
+  ];
+  if (!info.plotly) {
+    parts.push(h('div', { class: 'notice warn' },
+      'Plotly is not installed yet, so reports with charts cannot be made. Close this window, then in PowerShell in the project folder run once (no internet needed): ',
+      h('code', { text: INSTALL_CMD }), ' and start the toolkit again.'));
+  }
+  if (st.error) {
+    parts.push(h('div', { class: 'notice bad', text: `Settings file problem: ${st.error}` }));
+  } else {
+    parts.push(h('div', { class: 'card' },
+      h('h2', { text: 'Settings' }),
+      st.path ? h('p', {}, 'Using ', h('code', { text: st.path }))
+        : h('p', { text: 'No settings file found, so the defaults are used (calendar years, no excluded accounts, no groups). Copy settings.example.toml to data\\settings.toml and edit it to set tax years, groups and inflation.' }),
+      h('p', { class: 'small muted', text: `Year mode: ${tax ? 'SA tax year (1 March – end February)' : 'calendar year'} · excluded accounts: ${st.excluded_accounts.length} · category groups: ${st.groups.length} · CPI table: ${st.cpi_file ? 'yes' : 'no'}` })));
+  }
+
+  const yearHelp = tax ? 'Tax years are given by the year in which they end, e.g. 2026 for 2025/26.' : 'Calendar years, e.g. 2025.';
+  for (const r of info.reports) {
+    const yearInputs = r.period_kind === 'single'
+      ? [['year', 'Year', 'latest finished year']]
+      : [['from', 'From year', 'first year'], ['to', 'To year', 'last year']];
+    const years = yearInputs.map(([key, label, placeholder]) => {
+      const input = h('input', { type: 'number', step: 1, placeholder, id: `r-${r.name}-${key}` });
+      return { key, input, node: h('div', { class: 'field' }, h('label', { for: input.id, text: label }), h('div', {}, input)) };
+    });
+    const inputs = r.params.map(paramInput);
+    const result = h('div');
+    const make = h('button', { type: 'button', class: 'primary', disabled: r.needs_charts && !info.plotly }, 'Make report');
+    make.addEventListener('click', () => busy(make, 'Making', async () => {
+      const body = { report: r.name, params: Object.fromEntries(r.params.map((p, i) => [p.name, inputs[i].read()])) };
+      for (const y of years) body[y.key] = y.input.value;
+      const res = await api('/api/report/run', body);
+      result.replaceChildren(summaryView(res.summary), h('div', { class: 'row' },
+        h('button', { type: 'button', class: 'primary', onclick: () => openReport(res.output) }, 'Open report'),
+        h('button', { type: 'button', onclick: () => openFolder(res.output) }, 'Show in folder')));
+      toast(`${r.name} is ready.`);
+    }));
+    parts.push(h('div', { class: 'card' },
+      h('h2', { text: r.name }), h('p', { class: 'muted', text: r.description }),
+      years.map(y => y.node), h('p', { class: 'small muted', text: `${yearHelp} Leave empty for ${r.period_kind === 'single' ? 'the latest finished year' : 'all years'}.` }),
+      inputs.length ? h('details', {}, h('summary', { text: 'Options' }), inputs.map(i => i.node)) : null,
+      h('div', { class: 'row' }, make), result));
+  }
+
+  if (info.files.length) {
+    parts.push(h('h2', { text: 'Reports made earlier' }), h('div', { class: 'card' },
+      h('table', { class: 'data' }, h('tbody', {}, info.files.map(f => h('tr', {},
+        h('td', { text: f.name }), h('td', { class: 'num muted small', text: fmtDate(f.modified) }),
+        h('td', {}, h('button', { type: 'button', onclick: () => openReport(f.path) }, 'Open'))))))));
+  }
+  main(parts);
+}
+
 // --- results -----------------------------------------------------------------------------------------------
 
 async function viewResults() {
@@ -490,7 +559,7 @@ async function viewExport() {
 
 // --- navigation ---------------------------------------------------------------------------------------------
 
-const VIEWS = { file: viewFile, analyse: viewAnalyse, review: viewReview, results: viewResults, export: viewExport };
+const VIEWS = { file: viewFile, analyse: viewAnalyse, review: viewReview, reports: viewReports, results: viewResults, export: viewExport };
 
 function updateHeader() {
   const s = app.status;

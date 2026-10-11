@@ -54,10 +54,13 @@ class ApiError(Exception):
 class UiState:
     """What the interface works on: the chosen HomeBank file and the output folder."""
 
-    def __init__(self, out_root: Path = OUT_DIR, data_dir: Path = DATA_DIR, input_path: Path | None = None):
+    def __init__(self, out_root: Path = OUT_DIR, data_dir: Path = DATA_DIR, input_path: Path | None = None,
+                 settings_path: Path | None = None):
         self.out_root = Path(out_root).resolve()
         self.data_dir = Path(data_dir).resolve()
         self.input_path = Path(input_path).resolve() if input_path else None
+        #: report settings file; None = data/settings.toml if it exists, else defaults
+        self.settings_path = Path(settings_path).resolve() if settings_path else None
         self.lock = threading.RLock()  # one job at a time
         self._book = None
         self._book_stamp = None
@@ -303,7 +306,10 @@ def api_export_sqlite(state: UiState, q: dict, body: Any) -> dict:
     with state.lock:
         book = state.book()
         out = state.out_root / "homebank.sqlite"
-        counts = export_sqlite(book, out)
+        from ..reports.settings import DEFAULT_PATH
+
+        has_settings = state.settings_path is not None or DEFAULT_PATH.is_file()
+        counts = export_sqlite(book, out, _settings(state) if has_settings else None)
     s = Summary("SQLite export")
     for table in ("transactions", "splits", "accounts", "categories", "payees", "tags", "rules", "templates"):
         s.count(table, counts[table])
@@ -311,7 +317,7 @@ def api_export_sqlite(state: UiState, q: dict, body: Any) -> dict:
     return {"summary": s.to_dict(), "output": str(out)}
 
 
-def open_in_file_manager(path: Path) -> None:  # replaced in tests
+def open_in_file_manager(path: Path) -> None:  # replaced in tests; opens folders and files alike
     if sys.platform.startswith("win"):
         os.startfile(str(path))  # type: ignore[attr-defined]
     elif sys.platform == "darwin":
@@ -320,9 +326,79 @@ def open_in_file_manager(path: Path) -> None:  # replaced in tests
         subprocess.run(["xdg-open", str(path)], check=False)
 
 
+# --- reports ---------------------------------------------------------------------------------------
+
+
+def _settings(state: UiState):
+    from ..reports.settings import DEFAULT_PATH, load_settings
+
+    if state.settings_path is not None:
+        return load_settings(state.settings_path)
+    return load_settings(DEFAULT_PATH) if DEFAULT_PATH.is_file() else load_settings(None)
+
+
+def api_reports(state: UiState, q: dict, body: Any) -> dict:
+    import importlib.util
+
+    from ..reports import discover
+    from ..reports.html import INSTALL_HINT
+
+    info: dict[str, Any] = {"plotly": importlib.util.find_spec("plotly") is not None, "install_hint": INSTALL_HINT}
+    try:
+        s = _settings(state)
+        info["settings"] = {
+            "path": str(s.path) if s.path else None, "year_mode": s.year_mode,
+            "excluded_accounts": s.exclude_accounts, "groups": [g.name for g in s.groups],
+            "cpi_file": str(s.cpi_file) if s.cpi_file else None, "error": None,
+        }
+    except HbkitError as e:
+        info["settings"] = {"error": str(e)}
+    info["reports"] = [{
+        "name": r.name, "description": r.description, "period_kind": r.period_kind,
+        "needs_charts": r.needs_charts,
+        "params": [{"name": p.name, "option": p.option, "type": p.type.__name__, "default": p.default,
+                    "help": p.help, "choices": list(p.choices) if p.choices else None} for p in r.params],
+    } for r in discover().values()]
+    folder = state.out_root / "reports"
+    files = sorted(folder.glob("*.html"), key=lambda p: p.stat().st_mtime, reverse=True) if folder.is_dir() else []
+    info["files"] = [_file_info(p) for p in files[:200]]
+    return info
+
+
+def _year(value: Any, name: str) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise HbkitError(f"the {name} year is not a number") from None
+
+
+def api_report_run(state: UiState, q: dict, body: Any) -> dict:
+    from ..reports import discover
+    from ..reports.base import run_report
+
+    report = discover().get(str(body.get("report", "")))
+    if report is None:
+        raise ApiError(HTTPStatus.NOT_FOUND, "unknown report")
+    given = body.get("params") or {}
+    params = {p.name: _coerce(p, given.get(p.name, p.default)) for p in report.params}
+    with state.lock:
+        book = state.book()
+        summary, path = run_report(report, book, state.input_path, _settings(state), state.out_root, params,
+                                   year=_year(body.get("year"), "chosen"), start=_year(body.get("from"), "first"),
+                                   end=_year(body.get("to"), "last"))
+    return {"summary": summary.to_dict(), "output": str(path)}
+
+
 def api_open(state: UiState, q: dict, body: Any) -> dict:
-    """Show a results folder (or the folder holding a new copy) in Windows Explorer."""
+    """Show a results folder in Windows Explorer, or open a report page in the browser."""
     target = state.inside_out(str(body.get("path", "")))
+    if body.get("file"):
+        if not target.is_file() or target.suffix.lower() not in (".html", ".csv"):
+            raise ApiError(HTTPStatus.NOT_FOUND, "that report does not exist")
+        open_in_file_manager(target)
+        return {"opened": str(target)}
     if target.is_file():
         target = target.parent
     if not target.is_dir():
@@ -344,6 +420,8 @@ ROUTES = {
     ("POST", "/api/review/apply"): api_review_apply,
     ("POST", "/api/export-sqlite"): api_export_sqlite,
     ("POST", "/api/open"): api_open,
+    ("GET", "/api/reports"): api_reports,
+    ("POST", "/api/report/run"): api_report_run,
 }
 
 

@@ -14,6 +14,32 @@ from .errors import HbkitError
 from .privacy import OUT_DIR, Summary, Terminal, default_input, display_path, write_error_log
 
 
+SAMPLE_SETTINGS = """# Settings for the synthetic sample file (made by generate-sample --reporting).
+[period]
+year_mode = "tax"
+
+[accounts]
+exclude = ["Business account"]
+
+[groups."tax: rental – property A"]
+categories = ["Rental A"]
+tags = ["propA"]
+
+[groups."tax: medical"]
+categories = ["Medical"]
+tags = ["medical"]
+
+[groups.essential]
+categories = ["Groceries", "Utilities", "Transport:Fuel", "Medical:Medical aid"]
+
+[groups.discretionary]
+categories = ["Eating out", "Entertainment", "Clothing", "Gifts"]
+
+[inflation]
+cpi_file = "{cpi}"
+"""
+
+
 def _input_path(args: argparse.Namespace) -> Path:
     return Path(args.file) if args.file else default_input()
 
@@ -83,7 +109,7 @@ def cmd_generate_sample(args: argparse.Namespace) -> int:
     if out.exists() and not args.overwrite:
         raise HbkitError("the output file already exists; choose another --output or add --overwrite")
     opts = GeneratorOptions(seed=args.seed, start_year=args.start_year, years=args.years,
-                            sentinel=args.sentinel)
+                            sentinel=args.sentinel, reporting=args.reporting)
     gen = generate(opts)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(gen.data)
@@ -92,6 +118,16 @@ def cmd_generate_sample(args: argparse.Namespace) -> int:
     s.count("Transactions", gen.transactions)
     s.count("Years", args.years)
     s.output("Written to", out)
+    if args.reporting:
+        from .fixtures.generator import write_cpi
+
+        cpi = out.with_name(out.stem + "-cpi.csv")
+        settings = out.with_name(out.stem + "-settings.toml")
+        write_cpi(cpi, start_year=args.start_year, years=args.years)
+        settings.write_text(SAMPLE_SETTINGS.format(cpi=cpi.name), encoding="utf-8")
+        s.output("Sample CPI table", cpi)
+        s.output("Sample settings", settings)
+        s.note(f"Try: python -m hbkit report run annual-overview --file {out} --settings {settings}")
     Terminal().summary(s)
     return 0
 
@@ -101,7 +137,8 @@ def cmd_ui(args: argparse.Namespace) -> int:
 
     from .ui.server import UiState, make_server
 
-    state = UiState(out_root=Path(args.out), input_path=Path(args.file) if args.file else None)
+    state = UiState(out_root=Path(args.out), input_path=Path(args.file) if args.file else None,
+                    settings_path=Path(args.settings) if args.settings else None)
     server = make_server(state, args.port)
     term = Terminal()
     term.line("The HomeBank toolkit is running in your browser at:")
@@ -238,6 +275,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("ui", help="open the browser interface (runs only on this computer)")
     _add_file_option(p)
     _add_out_option(p)
+    p.add_argument("--settings", metavar="PATH", help="report settings (default: data/settings.toml if it exists)")
     p.add_argument("--port", type=int, default=0, help="port number (default: any free port)")
     p.add_argument("--no-browser", action="store_true", help="do not open the browser automatically")
     p.set_defaults(handler=cmd_ui)
@@ -281,6 +319,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=1, help="random seed (default 1)")
     p.add_argument("--start-year", type=int, default=2020, help="first year (default 2020)")
     p.add_argument("--years", type=int, default=6, help="number of years (default 6)")
+    p.add_argument("--reporting", action="store_true",
+                   help="add data for the reports (rental, medical, a business account) plus a sample CPI "
+                        "table and settings file next to the sample")
     p.add_argument("--sentinel", action="store_true", help=argparse.SUPPRESS)
     p.set_defaults(handler=cmd_generate_sample)
 

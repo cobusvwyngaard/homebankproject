@@ -104,6 +104,17 @@ tests/                       unittest; fixtures/homebank_example = HomeBank's ow
 docs/                        xhb-format.md, sqlite-schema.md, adding-an-analysis.md
 ```
 
+## Adding a report
+
+Follow docs/adding-a-report.md: one module in `hbkit/reports/` (`REPORT = ...`) plus
+tests. Build totals on the shared `r_*` views (docs/sqlite-schema.md) so every report
+counts transfers, splits and refunds the same way. Report pages may show the owner's
+data (they are files in `data/out/reports/`); the terminal shows counts only. Owner
+decisions: transfers to/from excluded accounts are left out entirely; income vs expense
+is decided by category type (refunds reduce spending); tax years are labelled "2025/26"
+and chosen by the year they end. Ask the owner before starting the "later" reports
+(recurring-commitments, monthly-cash-flow with Sankey, data-quality).
+
 ## Adding an analysis
 
 Follow docs/adding-an-analysis.md: one module in `hbkit/analyses/` plus
@@ -112,10 +123,11 @@ for file text reaching the screen. Update README.md (command list) when adding o
 
 ## Status
 
-All six stages of the approved plan are built: reader + structure report, writer,
-SQLite export, analysis framework, rule mining + apply-rules, README. The owner is a
-Windows user; descriptions are in the memo field; merged merchant-level rules are on.
-The owner ran `structure` on the real file (HomeBank 5.8.5, file version 1.5, 27k
-transactions, 154 rules, no unknown attributes, no warnings). Added since: the browser
-interface (`hb ui`, double-click `hb-ui.cmd`). Browser checks of the interface can be
-done with the globally installed Playwright for Node against a synthetic file.
+Built: reader + structure report, writer, SQLite export, analysis framework, rule
+mining + apply-rules, browser interface (`hb ui`), and the reporting layer (settings,
+`r_*` views, report framework) with three reports: annual-overview, category-trends,
+tax-year-statement (also on the Reports page of the browser interface). The owner is a
+Windows user (HomeBank 5.8.5 file, 27k transactions, 46 accounts, 163 categories);
+descriptions are in the memo field; merged merchant-level rules are on.
+Browser checks of the interface and of report pages can be done with the globally
+installed Playwright for Node against synthetic files only.
