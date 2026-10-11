@@ -66,6 +66,9 @@ class GeneratorOptions:
     #: unlinked, uncategorised sides (a clear pair, an ambiguous group, one side only,
     #: and a pair 6 days apart) in the last month.
     unlinked_transfers: bool = False
+    #: Share of merchant transactions left without a category, as after importing
+    #: without rules (0 = none; the standard file is unchanged).
+    uncategorised: float = 0.0
 
 
 @dataclass
@@ -358,6 +361,8 @@ class _Gen:
                 break
             roll -= prob
         if m.uncategorised and r.random() < m.uncategorised:
+            category = 0
+        if self.o.uncategorised and r.random() < self.o.uncategorised:
             category = 0
         if (end - d).days < 45 and r.random() < 0.25:  # recent imports not yet categorised
             category = 0
