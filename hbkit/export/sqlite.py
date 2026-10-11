@@ -401,8 +401,11 @@ def build_database(book: Book, conn: sqlite3.Connection) -> dict[str, int]:
     return {name: conn.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0] for name, _ in TABLES}
 
 
-def export_sqlite(book: Book, path: str | Path) -> dict[str, int]:
-    """Write a fresh database to `path`, replacing any previous export there."""
+def export_sqlite(book: Book, path: str | Path, settings=None) -> dict[str, int]:
+    """Write a fresh database to `path`, replacing any previous export there.
+
+    With report `settings`, the reporting layer (settings tables and r_* views) is added.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -411,6 +414,10 @@ def export_sqlite(book: Book, path: str | Path) -> dict[str, int]:
     conn = sqlite3.connect(tmp)
     try:
         counts = build_database(book, conn)
+        if settings is not None:
+            from ..reports.data import add_report_layer
+
+            add_report_layer(conn, book, settings)
     finally:
         conn.close()
     try:

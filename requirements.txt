@@ -1,0 +1,5 @@
+# Only needed for reports (python -m hbkit report ...). Install offline from the bundled files:
+#   .venv\Scripts\python -m pip install --no-index --find-links vendor\wheels -r requirements.txt
+plotly==7.1.0
+narwhals==2.27.1
+packaging==26.3

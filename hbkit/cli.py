@@ -18,6 +18,12 @@ def _input_path(args: argparse.Namespace) -> Path:
     return Path(args.file) if args.file else default_input()
 
 
+def _default_settings_exists() -> bool:
+    from .reports.settings import DEFAULT_PATH
+
+    return DEFAULT_PATH.is_file()
+
+
 def _add_file_option(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--file", metavar="PATH",
@@ -52,7 +58,12 @@ def cmd_export_sqlite(args: argparse.Namespace) -> int:
 
     book = read_file(_input_path(args))
     out = Path(args.output) if args.output else Path(args.out) / "homebank.sqlite"
-    counts = export_sqlite(book, out)
+    settings = None
+    if args.settings or _default_settings_exists():
+        from .reports.settings import load_settings
+
+        settings = load_settings(args.settings)
+    counts = export_sqlite(book, out, settings)
     s = Summary("SQLite export")
     s.heading("Rows written")
     for table in ("transactions", "splits", "accounts", "categories", "payees", "tags", "rules", "templates"):
@@ -106,6 +117,32 @@ def cmd_ui(args: argparse.Namespace) -> int:
     finally:
         server.server_close()
     term.line("Stopped.")
+    return 0
+
+
+def cmd_report_list(args: argparse.Namespace) -> int:
+    from .reports import discover
+
+    term = Terminal()
+    term.line("Reports (run with: python -m hbkit report run <name> [--year Y | --from Y1 --to Y2]):")
+    for name, report in discover().items():
+        term.line(f"  {name:<20} {report.description}")
+    return 0
+
+
+def _run_report(args: argparse.Namespace) -> int:
+    from .reports.base import run_report
+    from .reports.settings import load_settings
+    from .xhb.reader import read_file
+
+    report = args.report
+    path = _input_path(args)
+    book = read_file(path)
+    settings = load_settings(args.settings)
+    params = {p.name: getattr(args, p.name) for p in report.params}
+    summary, _ = run_report(report, book, path, settings, Path(args.out), params,
+                            year=args.year, start=args.start, end=args.end)
+    Terminal(book.sensitive_strings()).summary(summary)
     return 0
 
 
@@ -173,6 +210,31 @@ def build_parser() -> argparse.ArgumentParser:
 
     analyses = discover()
 
+    from .reports import discover as discover_reports
+
+    p = sub.add_parser("report", help="make HTML reports (see 'report list')")
+    p.set_defaults(handler=cmd_report_list)
+    rsub = p.add_subparsers(dest="report_command", metavar="<list|run>")
+    rp = rsub.add_parser("list", help="list the available reports")
+    rp.set_defaults(handler=cmd_report_list)
+    rp = rsub.add_parser("run", help="make one report")
+    rp.set_defaults(handler=cmd_report_list)
+    run_reports = rp.add_subparsers(dest="report_name", metavar="<report>")
+    for name, report in discover_reports().items():
+        one = run_reports.add_parser(name, help=report.description, description=report.description)
+        _add_file_option(one)
+        _add_out_option(one)
+        one.add_argument("--settings", metavar="PATH", help="settings file (default: data/settings.toml if it exists)")
+        one.add_argument("--year", type=int, metavar="Y",
+                         help="one year (tax year: the year in which it ends, e.g. 2026 for 2025/26)")
+        if report.period_kind == "range":
+            one.add_argument("--from", dest="start", type=int, metavar="Y", help="first year")
+            one.add_argument("--to", dest="end", type=int, metavar="Y", help="last year")
+        one.set_defaults(start=None, end=None)
+        for param in report.params:
+            _add_param(one, param)
+        one.set_defaults(handler=_run_report, report=report)
+
     p = sub.add_parser("ui", help="open the browser interface (runs only on this computer)")
     _add_file_option(p)
     _add_out_option(p)
@@ -208,6 +270,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_file_option(p)
     _add_out_option(p)
     p.add_argument("--output", metavar="PATH", help="database file (default: data/out/homebank.sqlite)")
+    p.add_argument("--settings", metavar="PATH",
+                   help="report settings, to add the r_* report views (default: data/settings.toml if it exists)")
     p.set_defaults(handler=cmd_export_sqlite)
 
     p = sub.add_parser("generate-sample", help="write a synthetic HomeBank file to try the toolkit on")

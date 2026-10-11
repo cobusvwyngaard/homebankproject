@@ -57,6 +57,10 @@ Practical consequence: never put the literal text `data/` in a shell command
 - Write in **South African English** (normalise, analyse, categorise, behaviour,
   colour, licence as a noun) in code comments, CLI text and documentation.
 - **Python 3.13, standard library only.** Ask the owner before adding any dependency.
+  Approved exception: **Plotly** (with narwhals and packaging), used only by the
+  reports in `hbkit/reports/` and imported lazily there. The owner prefers an offline
+  install, so the wheels are committed in `vendor/wheels/` (see vendor/README.md) and
+  pinned in `requirements.txt`. Report tests are skipped when Plotly is not installed.
 - Plan first, show the owner, then build in stages with all tests passing at each stage.
 - The writer never overwrites its input; it refuses if the output path is the input.
 - Adding an analysis later should mean one new module in `hbkit/analyses/` plus its tests.
@@ -90,6 +94,9 @@ hbkit/rules/engine.py        simulator of HomeBank's rule application
 hbkit/rules/normalise.py     cleaning of bank descriptions
 hbkit/rules/mining.py        rule mining, back-test, existing-rule scores, overlaps
 hbkit/analyses/              one module per analysis (ANALYSIS = ...), auto-discovered
+hbkit/reports/               reporting layer: settings.py (TOML), data.py (r_* views, periods,
+                             balances), base.py (Report plugins, runner), html.py (page, charts);
+                             one module per report (REPORT = ...), auto-discovered
 hbkit/ui/server.py           browser interface: stdlib HTTP server on 127.0.0.1, JSON API, security checks
 hbkit/ui/static/             the page (index.html, app.js, style.css); no external resources
 hbkit/fixtures/generator.py  synthetic .xhb files for tests and trying things out

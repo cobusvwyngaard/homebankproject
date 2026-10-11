@@ -53,6 +53,9 @@ class GeneratorOptions:
     control_chars: bool = False
     #: Multiply the number of everyday purchases (1.0 gives roughly 4,000 transactions).
     scale: float = 1.0
+    #: Extra content for the reports: rental property, medical tags, an account to
+    #: exclude, transactions on the tax-year boundary, and prices rising each year.
+    reporting: bool = False
 
 
 @dataclass
@@ -114,7 +117,17 @@ PAYEES = [
     (19, "Sunnydale Primary"), (20, "Virgin Active"), (21, "OUTsurance"), (22, "Eskom prepaid"),
 ]
 
-ACC_CHEQUE, ACC_CARD, ACC_SAVINGS, ACC_CASH, ACC_OLD = 1, 2, 3, 4, 5
+ACC_CHEQUE, ACC_CARD, ACC_SAVINGS, ACC_CASH, ACC_OLD, ACC_BUSINESS = 1, 2, 3, 4, 5, 6
+
+#: Yearly price rise in reporting mode, and the categories only reporting mode adds.
+INFLATION = 0.05
+CAT_RENTAL, CAT_RENT_IN, CAT_LEVIES, CAT_CONSULTING = 40, 41, 42, 44
+REPORT_CATEGORIES = [
+    (40, 0, "Rental A", False),
+    (41, 40, "Rent received", True),
+    (42, 40, "Levies", False),
+    (44, 0, "Consulting", True),
+]
 
 
 @dataclass
@@ -302,6 +315,10 @@ class _Gen:
         amount = round(r.uniform(lo, hi), 2) if hi > lo else lo
         if m.code == "NETFLIX" and d.year >= self.o.start_year + 3:
             amount = 229.0
+        if self.o.reporting:  # prices rise ~5% a year; electricity much faster
+            rate = 0.15 if m.code == "PREPAID ELECTRICITY" else INFLATION
+            years = (d - date(self.o.start_year, 1, 1)).days / 365.25
+            amount = round(amount * (1 + rate) ** years, 2)
         amount = amount if m.income else -amount
 
         category = m.category
@@ -379,6 +396,55 @@ class _Gen:
             if self.rng.random() < 0.3:
                 self.transfer(self.day_in(y, mth), ACC_CHEQUE, ACC_CASH, 500.0, "CASH FOR WALLET", end)
 
+    def reporting_events(self, end: date) -> None:
+        """Rental property A, a business account, medical tags and tax-year boundary days."""
+        r = self.rng
+        t = self.t
+        for y, mth in self.months():
+            first = date(y, mth, 1)
+            if first > end:
+                continue
+            grow = (1 + INFLATION) ** (y - self.o.start_year)
+            # rental property A: rent in, levies out (by category), repairs (by tag only)
+            self.add(date_julian=first.toordinal(), amount=round(9500 * grow, 2), account_key=ACC_CHEQUE,
+                     paymode=9, status=self.status_for(first, end), category_key=CAT_RENT_IN,
+                     tags=[t("propA", "TAG")], memo=t("RENT RECEIVED FLAT 2 PROPERTY A", "MEMO"))
+            levy_day = date(y, mth, 3)
+            self.add(date_julian=levy_day.toordinal(), amount=-round(1800 * grow, 2), account_key=ACC_CHEQUE,
+                     paymode=11, status=self.status_for(levy_day, end), category_key=CAT_LEVIES,
+                     memo=t("DEBIT ORDER BODY CORPORATE PROPERTY A", "MEMO"))
+            if mth in (2, 6, 10):
+                d = self.day_in(y, mth)
+                if d <= end:
+                    self.add(date_julian=d.toordinal(), amount=-round(r.uniform(800, 4000), 2),
+                             account_key=ACC_CHEQUE, paymode=6, status=self.status_for(d, end),
+                             category_key=2, tags=[t("propA", "TAG")],
+                             memo=t("POS PURCHASE BUILDERS WAREHOUSE", "MEMO"))
+            # business account: excluded in the report tests
+            d = date(y, mth, 15)
+            if d <= end:
+                self.transfer(d, ACC_CHEQUE, ACC_BUSINESS, 3000.0, "TRANSFER TO BUSINESS", end)
+                self.add(date_julian=d.toordinal(), amount=8000.0, account_key=ACC_BUSINESS, paymode=9,
+                         status=self.status_for(d, end), category_key=CAT_CONSULTING,
+                         memo=t("CONSULTING FEE RECEIVED", "MEMO"))
+            # medical tag on a pharmacy purchase
+            d = date(y, mth, 20)
+            if d <= end:
+                self.add(date_julian=d.toordinal(), amount=-round(250 * grow, 2), account_key=ACC_CHEQUE,
+                         paymode=6, status=self.status_for(d, end), category_key=22,
+                         tags=[t("medical", "TAG")], memo=t("POS PURCHASE MEDIRITE PHARMACY", "MEMO"))
+            # tax-year boundary: last day of February and 1 March
+            if mth == 2:
+                last_feb = date(y, 3, 1) - timedelta(days=1)
+                if last_feb <= end:
+                    self.add(date_julian=last_feb.toordinal(), amount=-650.0, account_key=ACC_CHEQUE,
+                             paymode=8, status=self.status_for(last_feb, end), category_key=5,
+                             memo=t("ANNUAL LICENCE RENEWAL", "MEMO"))
+            if mth == 3:
+                self.add(date_julian=first.toordinal(), amount=300.0, account_key=ACC_CHEQUE, paymode=9,
+                         status=self.status_for(first, end), category_key=21,
+                         memo=t("MEDICAL AID REFUND", "MEMO"))
+
     # --- static elements ------------------------------------------------------------------
 
     def static_elements(self, end: date) -> list[str]:
@@ -404,9 +470,12 @@ class _Gen:
         ]
         if self.o.unknown_extras:
             accounts[0].extra["futureattr"] = "1"
+        if self.o.reporting:
+            accounts.append(Account(key=ACC_BUSINESS, pos=6, type=6, currency_key=1,
+                                    name=t("Business account", "ACC"), initial=5000.0))
         lines += [S.serialise_account(a) for a in accounts]
         lines += [S.serialise_payee(Payee(key=k, name=t(n, "PAYEE"))) for k, n in PAYEES]
-        for key, parent, name, income in CATEGORIES:
+        for key, parent, name, income in CATEGORIES + (REPORT_CATEGORIES if self.o.reporting else []):
             flags = (F.GF_SUB if parent else 0) | (F.GF_INCOME if income else 0)
             budget = {}
             if key == 1:
@@ -415,8 +484,10 @@ class _Gen:
             lines.append(S.serialise_category(Category(
                 key=key, parent_key=parent, flags=flags, name=t(name, "CAT"), budget=budget,
             )))
-        lines += [S.serialise_tag(Tag(key=k, name=t(n, "TAG"))) for k, n in
-                  ((1, "holiday"), (2, "business"), (3, "tax"))]
+        tags = [(1, "holiday"), (2, "business"), (3, "tax")]
+        if self.o.reporting:
+            tags += [(4, "propA"), (5, "medical")]
+        lines += [S.serialise_tag(Tag(key=k, name=t(n, "TAG"))) for k, n in tags]
         lines += [S.serialise_rule(r) for r in self.rules()]
         lines += [S.serialise_template(x) for x in self.templates(end)]
         return lines
@@ -461,6 +532,8 @@ class _Gen:
         self.merchant_events(end)
         self.one_offs(end)
         self.transfers(end)
+        if o.reporting:
+            self.reporting_events(end)
 
         # HomeBank writes transactions account by account, each sorted by date.
         ordered = sorted(enumerate(self.txns), key=lambda it: (it[1].account_key, it[1].date_julian, it[0]))
@@ -490,7 +563,7 @@ class _Gen:
 
 
 def _path(key: int) -> str:
-    names = {k: (p, n) for k, p, n, _ in CATEGORIES}
+    names = {k: (p, n) for k, p, n, _ in CATEGORIES + REPORT_CATEGORIES}
     parent, name = names[key]
     return f"{names[parent][1]}:{name}" if parent else name
 
@@ -498,6 +571,21 @@ def _path(key: int) -> str:
 def generate(options: GeneratorOptions | None = None) -> GeneratedFile:
     """Build a synthetic HomeBank file in memory."""
     return _Gen(options or GeneratorOptions()).build()
+
+
+def write_cpi(path: str | Path, start_year: int = 2020, years: int = 6, end_month: int = 6) -> None:
+    """A fictional monthly CPI table rising by INFLATION a year (month,index CSV).
+
+    It deliberately stops a few months before the data does, like a real CPI series.
+    """
+    rows = ["month,index"]
+    for y in range(start_year, start_year + years):
+        for m in range(1, 13):
+            if y == start_year + years - 1 and m > end_month:
+                break
+            months = (y - start_year) * 12 + (m - 1)
+            rows.append(f"{y}-{m:02d},{100 * (1 + INFLATION) ** (months / 12):.4f}")
+    Path(path).write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
 def write_sample(path: str | Path, options: GeneratorOptions | None = None) -> GeneratedFile:

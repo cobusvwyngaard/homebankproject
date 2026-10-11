@@ -124,6 +124,76 @@ Saved filters. `key`, `name`, `groups_json` (HomeBank's filter settings as text)
 Elements this toolkit does not know, kept for completeness.
 `id`, `element`, `line`, `attributes_json`.
 
+## Report layer
+
+The reports build these in memory each time they run. `export-sqlite` adds them to
+`homebank.sqlite` too when a settings file exists (`data/settings.toml`, or
+`--settings`), so you can use them in your own queries. They follow your settings:
+year mode, excluded accounts, category groups and the CPI table.
+
+Rules shared by every report:
+
+* **Lines:** split transactions are expanded into one line per split.
+* **Left out:** void transactions and everything in excluded accounts.
+* **`flow`** classifies each line:
+  * `transfer` — an internal transfer between two included accounts;
+  * `excluded` — a transfer to or from an excluded account, left out entirely;
+  * `income` — a line in an income category, or an uncategorised positive line;
+  * `expense` — everything else, so a refund in an expense category reduces spending.
+* **Totals:** income and expense totals use only `income` and `expense` lines, so
+  transfers are never counted.
+* **`period`:** the calendar year, or with the tax year mode the SA tax year, named
+  after the year in which it ends. `2026` is 1 March 2025 – 28 February 2026, shown
+  as `2025/26`.
+
+### r_lines
+Every included transaction line.
+Columns: `transaction_id`, `line_no` (1 for an unsplit transaction), `date`, `year`,
+`month`, `period`, `period_label`, `account_key`, `account`, `payee`, `memo` (the split
+memo when there is one), `tags`, `amount` (signed), `category_key`, `category` (full
+path), `category_top`, `flow`, `transfer_account_key`, `cpi_factor` (multiply an amount
+by this to express it in prices of the latest CPI month; 1.0 after the last CPI month,
+NULL before the first one or without a CPI table).
+
+### r_flows
+`r_lines` without transfers (`flow` is `income` or `expense`); the source of every total.
+Columns: the same as `r_lines`: `transaction_id`, `line_no`, `date`, `year`, `month`,
+`period`, `period_label`, `account_key`, `account`, `payee`, `memo`, `tags`, `amount`,
+`category_key`, `category`, `category_top`, `flow`, `transfer_account_key`, `cpi_factor`.
+
+### r_group_lines
+One row per `r_flows` line per category group it belongs to (by category, including
+subcategories, or by tag; a line matched both ways appears once per group).
+Columns: `group_name`, then the columns of `r_flows`: `transaction_id`, `line_no`,
+`date`, `year`, `month`, `period`, `period_label`, `account_key`, `account`, `payee`,
+`memo`, `tags`, `amount`, `category_key`, `category`, `category_top`, `flow`,
+`transfer_account_key`, `cpi_factor`.
+
+### r_category_period
+Totals per period, flow and category.
+Columns: `period`, `period_label`, `flow`, `category_key`, `category`
+(`(uncategorised)` when empty), `category_top`, `total` (signed: spending is negative),
+`real_total` (in prices of the latest CPI month; NULL without a CPI table),
+`lines_without_cpi` (lines before the first CPI month, left out of `real_total`), `lines`.
+
+### r_period_totals
+Columns: `period`, `period_label`, `income`, `expenses` (a positive number),
+`net_savings` (income − expenses), `savings_rate` (net savings ÷ income; NULL when there
+is no income).
+
+### report_settings
+`key`, `value`. Key `year_mode`: `calendar` or `tax`.
+
+### excluded_accounts
+`account_key` of each excluded account.
+
+### group_members
+`group_name`, `category_key` (one row per category, subcategories included) or
+`tag_name` (one row per tag).
+
+### cpi
+`month` (`YYYY-MM`), `idx` (the index value).
+
 ## Example queries
 
 Spending per top-level category per year:
