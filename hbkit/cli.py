@@ -171,6 +171,77 @@ def cmd_prepare_import(args: argparse.Namespace) -> int:
     return 0
 
 
+TRANSFER_HEADER = [
+    "approve", "kind", "group", "out_index", "out_date", "out_account", "out_amount", "out_memo",
+    "in_index", "in_date", "in_account", "in_amount", "in_memo", "days_apart", "signs",
+]
+
+
+def cmd_link_transfers(args: argparse.Namespace) -> int:
+    import hashlib
+    import json
+
+    from .analyses.base import write_csv, write_json
+    from .analyses.rule_mining import APPROVED, read_review
+    from .imports.transfers import default_output, find_transfers, link_transfers
+    from .privacy import new_run_dir
+    from .xhb.reader import read_file
+
+    input_path = _input_path(args)
+    book = read_file(input_path)
+    term = Terminal(book.sensitive_strings())
+    if args.review:
+        review = Path(args.review)
+        if review.is_dir():
+            review = review / "transfers.csv"
+        if not review.is_file():
+            raise HbkitError("transfers.csv was not found (give the file or the folder that contains it)")
+        rows = read_review(review, ("approve", "out_index", "in_index"))
+        meta_path = review.parent / "summary.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {}
+        approved = [r for r in rows if r.get("approve", "").strip().lower() in APPROVED]
+        try:
+            pairs = [(int(r["out_index"]), int(r["in_index"])) for r in approved]
+        except ValueError:
+            raise HbkitError("out_index and in_index must be whole numbers") from None
+        summary, _ = link_transfers(book, pairs, int(meta.get("days", args.days)), input_path,
+                                    Path(args.output) if args.output else default_output(Path(args.out)),
+                                    meta.get("source_sha256"))
+        term.summary(summary)
+        return 0
+
+    result = find_transfers(book, args.days)
+    folder = new_run_dir(Path(args.out), "transfers")
+
+    def row(kind, group, p):
+        return ["", kind, group, p.out.index, p.out.date, book.account_name(p.out.account_key), p.out.amount,
+                p.out.memo, p.into.index, p.into.date, book.account_name(p.into.account_key), p.into.amount,
+                p.into.memo, p.gap, "; ".join(p.signs)]
+
+    write_csv(folder / "transfers.csv", TRANSFER_HEADER,
+              [row("pair", "", p) for p in result.pairs]
+              + [row("choice", i, p) for i, group in enumerate(result.choices, start=1) for p in group])
+    write_csv(folder / "without_other_side.csv",
+              ["date", "account", "amount", "memo", "why_it_looks_like_a_transfer", "likely_other_account"],
+              ([x.txn.date, book.account_name(x.txn.account_key), x.txn.amount, x.txn.memo, "; ".join(x.reasons),
+                book.account_name(x.likely_account) or "" if x.likely_account else ""] for x in result.lonely))
+    write_json(folder / "summary.json", {"days": result.days, "source_sha256": hashlib.sha256(book.raw).hexdigest(),
+                                         "pairs": len(result.pairs), "choice_groups": len(result.choices),
+                                         "without_other_side": len(result.lonely)})
+    s = Summary("Find transfers")
+    s.count("Transactions without a category considered", result.considered)
+    s.count("Pairs", len(result.pairs))
+    s.count("Groups with more than one possible partner", len(result.choices))
+    s.count("Without another side (handle by hand)", len(result.lonely))
+    s.output("Folder", folder)
+    s.note("Next: put y in the approve column of transfers.csv for the pairs to link (for a group,", terminal_only=True)
+    s.note("only one row per transaction), save, then run", terminal_only=True)
+    s.note("python -m hbkit link-transfers --review <that folder>", terminal_only=True)
+    s.note("(or use the Transfers page of the browser interface: python -m hbkit ui)", terminal_only=True)
+    term.summary(s)
+    return 0
+
+
 def cmd_generate_sample(args: argparse.Namespace) -> int:
     from .fixtures.generator import GeneratorOptions, generate
 
@@ -392,6 +463,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--month", metavar="YYYY-MM", help="the month it is for (default: that of its latest transaction)")
     p.add_argument("--data", metavar="FOLDER", default=str(DATA_DIR), help=argparse.SUPPRESS)
     p.set_defaults(handler=cmd_prepare_import)
+
+    p = sub.add_parser("link-transfers",
+                       help="find transfers between your accounts that arrived as two transactions, and link them "
+                            "in a NEW copy of your HomeBank file")
+    _add_file_option(p)
+    _add_out_option(p)
+    p.add_argument("--days", type=int, default=4, help="at most this many days between the two sides (default 4)")
+    p.add_argument("--review", metavar="PATH",
+                   help="link the pairs approved in transfers.csv (or the folder that contains it)")
+    p.add_argument("--output", metavar="PATH", help="name of the new copy (default: data/out/with-transfers_<date>.xhb)")
+    p.set_defaults(handler=cmd_link_transfers)
 
     p = sub.add_parser("generate-sample", help="write a synthetic HomeBank file to try the toolkit on")
     _add_out_option(p)

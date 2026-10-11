@@ -127,6 +127,11 @@ info tags kxfer scat samt smem`
   512 imported, 1024 past.
 * Internal transfers: two `<ope>` elements with the same `kxfer`, each pointing at the
   other account with `dst_account`. Before 5.x, payment mode 5 marked them instead.
+  Linking two existing transactions (`transaction_xfer_change_to_child` in
+  hb-transaction.c) sets flag 8 on both, `kxfer` to one above the highest in the file on
+  both, and `dst_account` to the other side's account; the payment mode is not changed.
+  HomeBank refuses transfers with a closed account. Its import pairs transfers by itself
+  only for OFX files; its CSV import turns payment mode 5 into 4 ("bank transfer").
 * `paymode`: 0 none, 1 credit card, 2 cheque, 3 cash, 4 bank transfer, 5 internal
   transfer (old), 6 debit card, 7 standing order, 8 electronic payment, 9 deposit,
   10 bank fee, 11 direct debit, 12 mobile phone.

@@ -125,3 +125,45 @@ class LinkTests(TempDirTestCase):
         into = new.transactions[self.result.pairs[0].into.index]
         self.assertEqual(out.flags, F.OF_INTXFER)
         self.assertEqual(into.flags, F.OF_INTXFER | F.OF_INCOME)
+
+
+class CommandTests(TempDirTestCase):
+    def test_find_review_and_link(self):
+        import csv
+
+        from .helpers import run_cli
+
+        src = self.write_sample("finances.xhb", unlinked_transfers=True)
+        out = self.tmp / "out"
+        code, stdout, err = run_cli("link-transfers", "--file", str(src), "--out", str(out))
+        self.assertEqual(code, 0, err)
+        folder = next((out / "transfers").iterdir())
+        self.assertEqual({p.name for p in folder.iterdir()}, {"transfers.csv", "without_other_side.csv", "summary.json"})
+        with open(folder / "transfers.csv", encoding="utf-8-sig", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        self.assertEqual([r["kind"] for r in rows], ["pair", "choice", "choice", "choice", "choice"])
+        rows[0]["approve"] = "y"
+        next(r for r in rows if r["out_memo"] == "TRANSFER OUT" and r["in_memo"] == "DEPOSIT TRANSFER")["approve"] = "ja"
+        with open(folder / "transfers.csv", "w", encoding="utf-8-sig", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=list(rows[0]))
+            w.writeheader()
+            w.writerows(rows)
+        code, stdout, err = run_cli("link-transfers", "--file", str(src), "--out", str(out), "--review", str(folder))
+        self.assertEqual(code, 0, err)
+        self.assertIn("Transfers linked", stdout)
+        new = read_bytes(next(out.glob("with-transfers_*.xhb")).read_bytes())
+        self.assertEqual(sum(1 for t in new.transactions if t.is_internal_transfer) -
+                         sum(1 for t in read_bytes(src.read_bytes()).transactions if t.is_internal_transfer), 4)
+
+        src.write_bytes(sample(unlinked_transfers=True, seed=2).data)  # the file changed since the listing
+        code, _, err = run_cli("link-transfers", "--file", str(src), "--out", str(out), "--review", str(folder))
+        self.assertEqual(code, 2)
+        self.assertIn("has changed since the transfers were listed", err)
+
+    def test_privacy(self):
+        from .helpers import run_cli
+
+        src = self.write_sample("s.xhb", unlinked_transfers=True, sentinel=True)
+        code, stdout, err = run_cli("link-transfers", "--file", str(src), "--out", str(self.tmp / "out"))
+        self.assertEqual(code, 0, err)
+        self.assertNoSentinel(stdout, err)

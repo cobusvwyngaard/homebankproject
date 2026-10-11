@@ -99,7 +99,8 @@ hbkit/reports/               reporting layer: settings.py (TOML), data.py (r_* v
                              one module per report (REPORT = ...), auto-discovered
 hbkit/imports/               preparing bank files for import: formats.py (QIF, HomeBank CSV: read,
                              add categories to a copy), predict.py (per-account categories, account
-                             guess), memory.py (file name -> account record), session.py (month folders)
+                             guess), memory.py (file name -> account record), session.py (month folders),
+                             transfers.py (find unlinked transfer pairs, link them in a new copy)
 hbkit/ui/server.py           browser interface: stdlib HTTP server on 127.0.0.1, JSON API, security checks
 hbkit/ui/static/             the page (index.html, app.js, style.css); no external resources
 hbkit/fixtures/generator.py  synthetic .xhb files for tests and trying things out
@@ -135,7 +136,10 @@ page and `prepare-import`: categories per account written into a copy of a bank'
 HomeBank CSV file before import; record of file names and accounts in the data folder's
 `import-accounts.json`; bank file formats in docs/import-files.md, learnt from HomeBank's
 import code plus the owner's description of their two banks' layouts — never put real
-statement lines in tests or docs), and the reporting layer (settings,
+statement lines in tests or docs), transfer linking after import (Transfers page and
+`link-transfers`; owner decisions: 4 days apart by default, pairs start unticked with a
+select-all, transactions without another side are only listed, never created), and the
+reporting layer (settings,
 `r_*` views, report framework) with three reports: annual-overview, category-trends,
 tax-year-statement (also on the Reports page of the browser interface). The owner is a
 Windows user (HomeBank 5.8.5 file, 27k transactions, 46 accounts, 163 categories);

@@ -12,6 +12,8 @@ A small program that runs on your own computer and analyses your HomeBank file
 * **prepare the files you download from your banks** (QIF or HomeBank CSV) before you
   import them: it fills in categories from each account's own history — something
   HomeBank's rules cannot do — and remembers which file belongs to which account;
+* **link transfers** between your own accounts that arrived as two separate
+  transactions, in a new copy of your file;
 * make **reports** — an annual overview, category trends (with inflation) and a tax-year
   statement — as pages that open in your browser and work offline.
 
@@ -169,10 +171,12 @@ The pages, from left to right:
    choose the month, add the files, check the account each one is linked to, then
    *Prepare…* to see and edit the categories and save the prepared copy. See
    [Preparing bank files for import](#preparing-bank-files-for-import).
-5. **Reports** — make a report (choose the years and options), then *Open report*. It
+5. **Transfers** — after importing, link transfers between your own accounts that
+   arrived as two separate transactions. See [Linking transfers](#linking-transfers).
+6. **Reports** — make a report (choose the years and options), then *Open report*. It
    also shows which settings file is used, and lists the reports you made before.
-6. **Results** — every result file of every analysis run, as sortable tables.
-7. **Export** — create the SQLite database.
+7. **Results** — every result file of every analysis run, as sortable tables.
+8. **Export** — create the SQLite database.
 
 *Show folder* buttons open the results folder in Windows Explorer.
 
@@ -454,6 +458,49 @@ are written; the screen shows only counts. Use the browser to see and change the
 
 ---
 
+## Linking transfers
+
+When you move money between your own accounts, both banks' files contain one side of
+it: money out of one account, the same amount into the other. HomeBank links such pairs
+by itself only when it imports OFX files. From QIF and CSV files they arrive as two
+ordinary transactions, usually without a category (HomeBank's CSV import even turns the
+"internal transfer" payment mode into an ordinary "bank transfer"). The toolkit links
+them **after** you have imported everything.
+
+1. Import the month's files in HomeBank and save. Close HomeBank and copy the file into
+   the `data` folder.
+2. Open **Transfers** in the browser interface. Only transactions **without a category**
+   in open accounts are considered.
+   * **Pairs**: money out in one account and exactly the same amount into another (same
+     currency) at most **4 days** apart (change it at the top), where neither has any
+     other possible partner. Each pair shows its signs: the text names the other account,
+     earlier transfers between the two accounts, the payment mode. A pair with no sign
+     but the amount and date says so — check those. Nothing is ticked to start with; tick
+     the ones that are transfers, or use **Select all**.
+   * **Choose which belong together**: amounts with more than one possible partner (two
+     equal transfers on the same day, for example). For each transaction out, pick the
+     one it belongs with, or leave it unlinked.
+   * **Without another side**: transactions that look like transfers (payment mode
+     "bank transfer", the text names another of your accounts, or described like earlier
+     transfers) but have no partner, for example because the other account is not
+     imported. They are only listed: handle them by hand in HomeBank.
+3. Click **Link selected in a new copy…**. The new copy is
+   `data\out\with-transfers_<date_time>.xhb`; your original file is not changed. In the
+   copy each pair is linked exactly as HomeBank links a transfer by hand: both sides get
+   the transfer mark, the other account and a shared transfer number. Nothing else
+   changes, and the copy is checked before it is saved.
+4. Open the copy in HomeBank and check the transfers. When you are happy, close
+   HomeBank, keep your original as a backup and use the copy as your file (rename it to
+   your file's name).
+
+From PowerShell: `.\hb link-transfers` writes `transfers.csv` (and
+`without_other_side.csv`) to `data\out\transfers\<date_time>\`. Put `y` in the
+*approve* column of the pairs to link (for a group, one row per transaction), save, and
+run `.\hb link-transfers --review "<that folder>"`. If the HomeBank file changed in
+between, it refuses and asks you to list the transfers again.
+
+---
+
 ## Reports
 
 Reports are single web pages (with a CSV file where useful) saved in
@@ -607,6 +654,7 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 | A report says some names were not found | Check the spelling against HomeBank (capitals do not matter); see the list at the top of the report. |
 | `this is neither a QIF file nor a HomeBank CSV file` | The toolkit reads QIF and HomeBank's 8-column CSV only. Download that format from your bank, or ask Claude to add the bank's layout (describe the columns; do not send a real file). |
 | `could not tell which account this file belongs to` | Give it with `--account "name as in HomeBank"`, or choose it on the Imports page. |
+| `the HomeBank file has changed since the transfers were listed` | List the transfers again (*Find again* on the Transfers page, or run `link-transfers` without `--review`). |
 | `import-accounts.json in the data folder could not be read` | It was damaged (e.g. edited by hand). Rename it; a new import record is started. |
 
 ---

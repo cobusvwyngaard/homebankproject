@@ -449,7 +449,7 @@ def _apply_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--output", metavar="PATH", help="name of the new copy (default: data/out/with-rules_<date>.xhb)")
 
 
-def read_review(path: Path) -> list[dict[str, str]]:
+def read_review(path: Path, required: tuple[str, ...] = ("approve", "rule_text", "category")) -> list[dict[str, str]]:
     """Read review.csv, coping with Excel re-saving it (BOM, ';' separator, Windows encoding)."""
     raw = path.read_bytes()
     for encoding in ("utf-8-sig", "cp1252"):
@@ -464,7 +464,7 @@ def read_review(path: Path) -> list[dict[str, str]]:
     if reader.fieldnames is None:
         raise HbkitError("the review file is empty")
     reader.fieldnames = [(h or "").strip().lower() for h in reader.fieldnames]
-    missing = [c for c in ("approve", "rule_text", "category") if c not in reader.fieldnames]
+    missing = [c for c in required if c not in reader.fieldnames]
     if missing:
         raise HbkitError(f"the review file has no {', '.join(missing)} column")
     return [{k: (v or "").strip() for k, v in row.items() if k} for row in reader]

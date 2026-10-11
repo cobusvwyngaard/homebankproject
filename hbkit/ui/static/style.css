@@ -173,6 +173,9 @@ table.data input[type=text] { width: 100%; min-width: 160px; padding: 4px 6px; }
 }
 .dropzone.over { border-color: var(--accent); background: var(--accent-soft); }
 table.data select { max-width: 280px; }
+td.arrow { color: var(--muted); font-size: 18px; text-align: center; }
+.choice-group { margin-top: 10px; }
+.choice-group table.data select { max-width: 620px; width: 100%; }
 table.data tr.warn-row { background: var(--warn-soft) !important; }
 button.compact { padding: 3px 10px; font-size: 13px; }
 
@@ -205,3 +208,4 @@ dialog.rule-dialog .toolbar { margin: 4px 0 6px; }
 }
 .toast.error { background: var(--bad); color: #fff; }
 .busy::after { content: " …"; }
+input.narrow { width: 5em; }

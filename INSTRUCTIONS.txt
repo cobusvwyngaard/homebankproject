@@ -96,7 +96,9 @@ Each month, the Imports page prepares the files you download from your
 banks (QIF or HomeBank CSV): choose the month, add the files, check the
 account of each, click Prepare... and import the PREPARED copy in
 HomeBank (File > Import). See README.md, "Preparing bank files for
-import".
+import". Afterwards, save in HomeBank, copy the file into the data
+folder again, and use the Transfers page to link transfers between
+your own accounts in a new copy (README.md, "Linking transfers").
 
 Optional, for the reports: copy settings.example.toml into the data
 folder, rename the copy to settings.toml and edit it (see README.md,

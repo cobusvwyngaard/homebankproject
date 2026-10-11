@@ -934,6 +934,119 @@ async function importPreview(month, file, account, onSaved) {
     result);
 }
 
+// --- transfers ---------------------------------------------------------------------------------------------
+
+function money(v) { return Number(v).toFixed(2); }
+
+async function viewTransfers() {
+  if (!app.status || !app.status.selected) { await needFile(); return; }
+  app.transferDays = app.transferDays ?? 4;
+  const info = await api(`/api/transfers?days=${encodeURIComponent(app.transferDays)}`);
+  const daysInput = h('input', { type: 'number', min: 0, max: 31, step: 1, value: info.days, class: 'narrow' });
+  const again = h('button', { type: 'button' }, 'Find again');
+  again.addEventListener('click', () => { app.transferDays = Number(daysInput.value); busy(again, 'Finding', viewTransfers); });
+
+  const fact = (value, label) => h('div', { class: 'fact' }, h('b', { text: value }), h('span', { text: label }));
+  const side = t => h('div', {}, h('div', {}, h('b', { text: t.account_name }), ' ', h('span', { class: 'muted small', text: t.date })),
+    h('div', { class: 'small', text: [t.memo, t.payee].filter(Boolean).join(' · ') }));
+  const signsCell = p => p.signs.length
+    ? p.signs.map(x => h('div', { class: 'small', text: `✓ ${x}` }))
+    : h('span', { class: 'pill warn', text: 'only the amount and date match' });
+
+  // clear pairs: unticked to start, with select all
+  const picked = new Set();
+  const counter = h('span', { class: 'muted small' });
+  const boxes = [];
+  const allBox = h('input', { type: 'checkbox', title: 'Select all', onchange: e => setAll(e.target.checked) });
+  function update() {
+    counter.textContent = `${picked.size} of ${info.pairs.length} selected`;
+    allBox.checked = info.pairs.length > 0 && picked.size === info.pairs.length;
+    allBox.indeterminate = picked.size > 0 && picked.size < info.pairs.length;
+    linkBtn.disabled = picked.size + chosen.size === 0;
+  }
+  function setAll(on) {
+    boxes.forEach(({ box, key, tr }) => { box.checked = on; tr.classList.toggle('approved', on); on ? picked.add(key) : picked.delete(key); });
+    update();
+  }
+  const pairRows = info.pairs.map(p => {
+    const key = `${p.out.index}:${p.into.index}`;
+    const tr = h('tr');
+    const box = h('input', { type: 'checkbox', onchange: e => { e.target.checked ? picked.add(key) : picked.delete(key); tr.classList.toggle('approved', e.target.checked); update(); } });
+    boxes.push({ box, key, tr });
+    tr.append(h('td', {}, box), h('td', {}, side(p.out)), h('td', { class: 'num', text: money(-p.out.amount) }),
+      h('td', { class: 'arrow', text: '→' }), h('td', {}, side(p.into)),
+      h('td', { class: 'num', text: p.gap ? `${p.gap}` : 'same day' }), h('td', {}, signsCell(p)));
+    return tr;
+  });
+
+  // ambiguous groups: one choice per money-out transaction
+  const chosen = new Map();  // out index -> "out:in"
+  const choiceCards = info.choices.map((group, gi) => {
+    const outs = [...new Map(group.map(p => [p.out.index, p.out])).values()];
+    return h('div', { class: 'choice-group' }, h('h3', { text: `Group ${gi + 1}: ${money(-group[0].out.amount)} in ${outs.length} transactions out` }),
+      h('table', { class: 'data' }, h('tbody', {}, outs.map(o => {
+        const options = group.filter(p => p.out.index === o.index);
+        const sel = h('select', { onchange: e => { e.target.value ? chosen.set(o.index, e.target.value) : chosen.delete(o.index); checkChoices(); update(); } },
+          h('option', { value: '' }, '— not linked —'),
+          options.map(p => h('option', { value: `${p.out.index}:${p.into.index}` },
+            `${p.into.account_name} · ${p.into.date} · ${p.into.memo || p.into.payee}${p.signs.length ? ` · ${p.signs.join('; ')}` : ''}`)));
+        return h('tr', {}, h('td', {}, side(o)), h('td', { class: 'num', text: money(-o.amount) }), h('td', { class: 'arrow', text: '→' }), h('td', {}, sel));
+      }))));
+  });
+  const choiceWarning = h('div', { class: 'notice bad', hidden: true });
+  function checkChoices() {
+    const ins = [...chosen.values()].map(k => k.split(':')[1]);
+    const twice = ins.length !== new Set(ins).size;
+    choiceWarning.hidden = !twice;
+    choiceWarning.textContent = twice ? 'The same money-in transaction is chosen twice; only the first will be linked.' : '';
+  }
+
+  const result = h('div');
+  const linkBtn = h('button', { type: 'button', class: 'primary', disabled: true }, 'Link selected in a new copy…');
+  linkBtn.addEventListener('click', () => {
+    const pairs = [...picked, ...chosen.values()].map(k => k.split(':').map(Number));
+    if (!confirm(`Link ${pairs.length} transfer(s) in a NEW copy of your HomeBank file?\nYour original file will not be changed.`)) return;
+    busy(linkBtn, 'Linking', async () => {
+      const res = await api('/api/transfers/link', { days: info.days, sha256: info.sha256, pairs });
+      result.replaceChildren(summaryView(res.summary));
+      result.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+  update();
+
+  const parts = [
+    h('h1', { text: 'Link transfers' }),
+    h('p', { class: 'lead', text: 'Transfers between your own accounts arrive from QIF and CSV files as two separate transactions. ' +
+      'After importing in HomeBank, save, copy the file into the data folder, and link them here: the toolkit writes a NEW copy ' +
+      'in which each pair is a HomeBank transfer. Only transactions without a category are considered.' }),
+    h('div', { class: 'row' }, h('label', { text: 'At most' }), daysInput, h('span', { text: 'days apart' }), again),
+    h('div', { class: 'facts' }, fact(info.considered, 'transactions without a category'), fact(info.pairs.length, 'pairs'),
+      fact(info.choices.length, 'groups to choose in'), fact(info.lonely.length, 'without another side')),
+  ];
+  parts.push(h('div', { class: 'card' }, h('h2', { text: 'Pairs' }),
+    info.pairs.length ? [
+      h('p', { class: 'small muted', text: 'Money out in one account and exactly the same amount in another, with no other possible partner. Tick the ones that are transfers.' }),
+      h('div', { class: 'toolbar' }, h('button', { type: 'button', onclick: () => setAll(true) }, 'Select all'),
+        h('button', { type: 'button', onclick: () => setAll(false) }, 'Clear'), counter),
+      h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
+        h('thead', {}, h('tr', {}, h('th', {}, allBox), ['Money out', 'Amount', '', 'Money in', 'Days apart', 'Signs'].map(t => h('th', { text: t })))),
+        h('tbody', {}, pairRows)))]
+      : h('p', { class: 'muted', text: 'No pairs found.' })));
+  if (info.choices.length) {
+    parts.push(h('div', { class: 'card' }, h('h2', { text: 'Choose which belong together' }),
+      h('p', { class: 'small muted', text: 'These amounts have more than one possible partner. For each transaction out, pick the one it belongs with, or leave it unlinked.' }),
+      choiceWarning, choiceCards));
+  }
+  parts.push(h('div', { class: 'toolbar' }, h('span', { class: 'spacer' }), linkBtn), result);
+  parts.push(h('div', { class: 'card' }, h('h2', { text: 'Without another side' }),
+    info.lonely.length ? [
+      h('p', { class: 'small muted', text: 'These look like transfers but no matching transaction was found, for example because the other account is not imported. Handle them by hand in HomeBank.' }),
+      dataTable(['date', 'account', 'amount', 'description', 'payee', 'why_it_looks_like_a_transfer', 'likely_other_account'],
+        info.lonely.map(x => [x.date, x.account_name, money(x.amount), x.memo, x.payee, x.reasons.join('; '), x.likely]), { pageSize: 100 })]
+      : h('p', { class: 'muted', text: 'None.' })));
+  main(parts);
+}
+
 // --- results -----------------------------------------------------------------------------------------------
 
 async function viewResults() {
@@ -981,7 +1094,8 @@ async function viewExport() {
 
 // --- navigation ---------------------------------------------------------------------------------------------
 
-const VIEWS = { file: viewFile, analyse: viewAnalyse, review: viewReview, imports: viewImports, reports: viewReports, results: viewResults, export: viewExport };
+const VIEWS = { file: viewFile, analyse: viewAnalyse, review: viewReview, imports: viewImports, transfers: viewTransfers,
+  reports: viewReports, results: viewResults, export: viewExport };
 
 function updateHeader() {
   const s = app.status;

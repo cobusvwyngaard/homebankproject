@@ -152,6 +152,15 @@ class SecurityTests(ServerTestCase):
         self.assertNotIn("insertAdjacentHTML", js)
         self.assertNotIn("document.write", js)
 
+    def test_no_inline_style_attributes(self):
+        # The Content-Security-Policy (style-src 'self') blocks style attributes.
+        import re
+
+        js = (ui.STATIC / "app.js").read_text(encoding="utf-8")
+        self.assertIsNone(re.search(r"\bstyle:\s*['\"`]", js))
+        self.assertNotIn("setAttribute('style'", js)
+        self.assertNotIn("style=", (ui.STATIC / "index.html").read_text(encoding="utf-8"))
+
 
 class ApiTests(ServerTestCase):
     def test_status_and_file(self):
@@ -434,3 +443,36 @@ class ImportPageTests(ServerTestCase):
         self.assertEqual(self.request("POST", "/api/import/link", {"month": "2025-10", "file": "outside.qif",
                                                                    "account": "x"})[0], 400)
         self.assertEqual(self.request("POST", "/api/import/expected", {"accounts": "7"})[0], 400)
+
+
+class TransferPageTests(ServerTestCase):
+    def setUp(self):
+        super().setUp()
+        self.src.write_bytes(sample(unlinked_transfers=True).data)
+
+    def test_list_and_link(self):
+        info = self.api("/api/transfers")
+        self.assertEqual((info["days"], len(info["pairs"]), len(info["choices"]), len(info["lonely"])), (4, 1, 1, 3))
+        pair = info["pairs"][0]
+        self.assertEqual((pair["out"]["account_name"], pair["into"]["account_name"], pair["gap"]),
+                         ("Cheque account", "Savings", 1))
+        self.assertEqual(len(self.api("/api/transfers?days=6")["pairs"]), 2)
+        before = self.src.read_bytes()
+        res = self.api("/api/transfers/link", {"days": 4, "sha256": info["sha256"],
+                                               "pairs": [[pair["out"]["index"], pair["into"]["index"]]]})
+        self.assertTrue(res["output"].endswith(".xhb"))
+        self.assertEqual(self.src.read_bytes(), before)
+        new = read_bytes(Path(res["output"]).read_bytes())
+        self.assertTrue(new.transactions[pair["out"]["index"]].is_internal_transfer)
+
+    def test_bad_requests(self):
+        info = self.api("/api/transfers")
+        self.assertEqual(self.request("GET", "/api/transfers?days=x")[0], 400)
+        self.assertEqual(self.request("GET", "/api/transfers?days=99")[0], 400)
+        self.assertEqual(self.request("POST", "/api/transfers/link", {"pairs": "1,2"})[0], 400)
+        self.assertEqual(self.request("POST", "/api/transfers/link", {"pairs": [["a", "b"]]})[0], 400)
+        status, res, _ = self.request("POST", "/api/transfers/link", {"sha256": "0" * 64, "pairs": [[1, 2]]})
+        self.assertEqual(status, 400)
+        self.assertIn("has changed", res["error"])
+        res = self.api("/api/transfers/link", {"sha256": info["sha256"], "pairs": []})
+        self.assertIsNone(res["output"])

@@ -612,6 +612,60 @@ def api_import_prepare(state: UiState, q: dict, body: Any) -> dict:
             "transactions": len(f.txns), "account_name": book.account_name(key)}
 
 
+# --- transfers -------------------------------------------------------------------------------------
+
+
+def _days(value: Any) -> int:
+    from ..imports.transfers import DEFAULT_DAYS
+
+    try:
+        return int(value) if value not in (None, "") else DEFAULT_DAYS
+    except (TypeError, ValueError):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "the number of days must be a whole number") from None
+
+
+def api_transfers(state: UiState, q: dict, body: Any) -> dict:
+    from ..imports.transfers import find_transfers
+
+    with state.lock:
+        book = state.book()
+        result = find_transfers(book, _days(q.get("days")))
+
+    def txn(t) -> dict:
+        return {"index": t.index, "date": t.date.isoformat(), "account": t.account_key,
+                "account_name": book.account_name(t.account_key) or "", "amount": t.amount, "memo": t.memo,
+                "payee": book.payee_name(t.payee_key) or "", "info": t.info}
+
+    def pair(p) -> dict:
+        return {"out": txn(p.out), "into": txn(p.into), "gap": p.gap, "signs": p.signs}
+
+    return {
+        "days": result.days, "sha256": result.source_sha256, "considered": result.considered,
+        "pairs": [pair(p) for p in result.pairs],
+        "choices": [[pair(p) for p in group] for group in result.choices],
+        "lonely": [{**txn(x.txn), "reasons": x.reasons,
+                    "likely": book.account_name(x.likely_account) or "" if x.likely_account else ""}
+                   for x in result.lonely],
+    }
+
+
+def api_transfers_link(state: UiState, q: dict, body: Any) -> dict:
+    from ..imports.transfers import default_output, link_transfers
+
+    chosen = body.get("pairs")
+    if not isinstance(chosen, list) or not all(isinstance(x, list) and len(x) == 2 for x in chosen):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "pairs must be a list of [out, in] transaction numbers")
+    try:
+        pairs = [(int(a), int(b)) for a, b in chosen]
+    except (TypeError, ValueError):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "invalid transaction number") from None
+    with state.lock:
+        book = state.book()
+        summary, output = link_transfers(book, pairs, _days(body.get("days")), state.input_path,
+                                         default_output(state.out_root), str(body.get("sha256") or "") or None)
+    return {"summary": summary.to_dict(), "output": str(output) if output else None}
+
+
 def api_open(state: UiState, q: dict, body: Any) -> dict:
     """Show a results folder in Windows Explorer, or open a report page in the browser."""
     target = state.inside_out(str(body.get("path", "")))
@@ -651,6 +705,8 @@ ROUTES = {
     ("POST", "/api/import/remove"): api_import_remove,
     ("GET", "/api/import/preview"): api_import_preview,
     ("POST", "/api/import/prepare"): api_import_prepare,
+    ("GET", "/api/transfers"): api_transfers,
+    ("POST", "/api/transfers/link"): api_transfers_link,
 }
 
 
