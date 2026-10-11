@@ -253,6 +253,11 @@ def serialise_template(t: Template) -> str:
     return n.done()
 
 
+#: The order in which serialise_transaction (HomeBank's save) writes <ope> attributes.
+OPE_ATTRIBUTE_ORDER = ("date", "amount", "account", "damt", "dst_account", "paymode", "grpflg", "st", "flags",
+                       "payee", "category", "wording", "info", "tags", "kxfer", "scat", "samt", "smem")
+
+
 def serialise_transaction(t: Transaction) -> str:
     n = _Node("ope")
     n.int("date", t.date_julian)

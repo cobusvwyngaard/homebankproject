@@ -68,6 +68,8 @@ OF_ISPAST = 1 << 10
 
 #: Payment mode 5 was the internal-transfer marker before HomeBank 5.x.
 OLDPAYMODE_INTXFER = 5
+#: "Bank transfer". HomeBank's CSV import turns payment mode 5 into this (hb-import-csv.c).
+PAYMODE_XFER = 4
 
 # Transaction status. From data version 50900 (HomeBank 5.9) "void" is 3; before
 # that 3 meant "remind" and 4 meant "void" (see homebank_upgrade_to_v14_59).

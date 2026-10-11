@@ -12,7 +12,8 @@ the way HomeBank 5.10.3 writes its files. Content:
   inconsistent ones, and one whose category changes over time;
 * existing assignment rules including deliberately bad ones (shadowed, dead,
   broken target, weak regex, invalid regex, payee-field, overwrite);
-* optionally two home loans whose transactions are categorised by account.
+* optionally two home loans whose transactions are categorised by account, and
+  unlinked transfers as imported from QIF/CSV files.
 
 Options cover older file versions, Windows line endings, unknown attributes and
 elements, control characters, and a "sentinel" mode that marks every piece of
@@ -61,6 +62,10 @@ class GeneratorOptions:
     #: both (only the account tells them apart) and insurance whose text differs only
     #: by a policy number.
     home_loans: bool = False
+    #: Transfers between own accounts as they arrive from QIF/CSV imports: two
+    #: unlinked, uncategorised sides (a clear pair, an ambiguous group, one side only,
+    #: and a pair 6 days apart) in the last month.
+    unlinked_transfers: bool = False
 
 
 @dataclass
@@ -483,6 +488,25 @@ class _Gen:
                          status=self.status_for(d, end), category_key=cat_insurance,
                          memo=self.t(f"BOND INSURANCE PREMIUM POLICY {policy}", "MEMO"))
 
+    def unlinked_transfer_events(self, end: date) -> None:
+        """Both sides of transfers as separate, uncategorised transactions (paymode 4)."""
+        y, m = end.year, end.month
+        rows = [
+            (10, ACC_CHEQUE, -1500.0, "IB TRANSFER TO SAVINGS"),  # a clear pair
+            (11, ACC_SAVINGS, 1500.0, "IB TRANSFER FROM CHEQUE"),
+            (12, ACC_CHEQUE, -3000.0, "PAYMENT TO CARD"),  # two outs, two ins: ambiguous
+            (12, ACC_CHEQUE, -3000.0, "TRANSFER OUT"),
+            (13, ACC_CARD, 3000.0, "PAYMENT RECEIVED THANK YOU"),
+            (13, ACC_SAVINGS, 3000.0, "DEPOSIT TRANSFER"),
+            (14, ACC_CHEQUE, -800.0, "IB TRANSFER TO SAVINGS"),  # no other side
+            (3, ACC_CHEQUE, -1234.56, "MONTHLY SWEEP"),  # six days apart
+            (9, ACC_SAVINGS, 1234.56, "SWEEP IN"),
+        ]
+        for day, acc, amount, memo in rows:
+            d = date(y, m, day)
+            self.add(date_julian=d.toordinal(), amount=amount, account_key=acc, paymode=F.PAYMODE_XFER,
+                     status=F.TXN_STATUS_NONE, memo=self.t(memo, "MEMO"))
+
     # --- static elements ------------------------------------------------------------------
 
     def static_elements(self, end: date) -> list[str]:
@@ -583,6 +607,8 @@ class _Gen:
             self.reporting_events(end)
         if o.home_loans:
             self.home_loan_events(end)
+        if o.unlinked_transfers:
+            self.unlinked_transfer_events(end)
 
         # HomeBank writes transactions account by account, each sorted by date.
         ordered = sorted(enumerate(self.txns), key=lambda it: (it[1].account_key, it[1].date_julian, it[0]))

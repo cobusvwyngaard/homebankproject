@@ -91,19 +91,26 @@ class XhbEditor:
 
     # --- generic edits --------------------------------------------------------------------
 
-    def replace(self, entity: Entity, changes: dict[str, str | None]) -> None:
+    def replace(self, entity: Entity, changes: dict[str, str | None],
+                order: tuple[str, ...] = ()) -> None:
         """Change attributes of an existing element, keeping the order of the others.
 
-        A value of None removes the attribute; new attributes are added at the end.
+        A value of None removes the attribute. A new attribute goes where HomeBank would
+        write it when `order` (HomeBank's attribute order) names it, otherwise at the end.
         """
         el = self._existing(entity)
-        attrs = dict(el.attrs)
+        items = [(k, v) for k, v in el.attrs.items() if changes.get(k, v) is not None]
+        items = [(k, changes.get(k, v)) for k, v in items]
+        rank = {name: i for i, name in enumerate(order)}
         for name, value in changes.items():
-            if value is None:
-                attrs.pop(name, None)
-            else:
-                attrs[name] = value
-        text = S.serialise_attributes(el.name, attrs.items(), S.CRLF_ATTRIBUTES.get(el.name, ()))
+            if value is None or name in el.attrs:
+                continue
+            pos = len(items)
+            if name in rank:
+                later = [i for i, (k, _) in enumerate(items) if rank.get(k, -1) > rank[name]]
+                pos = later[0] if later else len(items)
+            items.insert(pos, (name, value))
+        text = S.serialise_attributes(el.name, items, S.CRLF_ATTRIBUTES.get(el.name, ()))
         self._add(_Edit(el.start, el.end, [text], "replace", el))
 
     def remove(self, entity: Entity) -> None:
