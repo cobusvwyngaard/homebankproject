@@ -123,11 +123,14 @@ def style_figure(fig) -> None:
         colorway=SERIES,
         font=dict(family="Segoe UI, system-ui, sans-serif", size=13, color=TEXT),
         paper_bgcolor=SURFACE, plot_bgcolor=SURFACE,
-        margin=dict(l=60, r=20, t=50, b=50),
+        margin=dict(l=70, r=20, t=90, b=50),
         hoverlabel=dict(bgcolor="white", font_color=TEXT),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
         bargap=0.25, bargroupgap=0.06,
     )
+    if fig.layout.title and fig.layout.title.text:
+        # title at the very top, legend between title and plot: they never overlap
+        fig.update_layout(title=dict(x=0, xanchor="left", y=0.98, yanchor="top", font=dict(size=16)))
     fig.update_xaxes(showgrid=False, linecolor=GRID, tickfont_color=TEXT_2)
     fig.update_yaxes(gridcolor=GRID, zerolinecolor="#c9c8c2", tickfont_color=TEXT_2)
 

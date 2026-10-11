@@ -149,6 +149,10 @@ def run_report(report: Report, book: Book, input_path: Path, settings: Settings,
         if len(periods) > 1:
             span += "_to_" + period_label(periods[-1], settings.year_mode)
         stem = f"{report.name}_{span.replace('/', '-')}_{timestamp()}"
+        n = 2
+        while (folder / f"{stem}.html").exists():  # never overwrite an earlier report
+            stem = f"{report.name}_{span.replace('/', '-')}_{timestamp()}_{n}"
+            n += 1
         path = folder / f"{stem}.html"
         path.write_text(html_text, encoding="utf-8")
         s = Summary(f"Report: {report.name}")

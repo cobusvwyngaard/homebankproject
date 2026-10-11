@@ -234,31 +234,37 @@ def period_title(period: int, mode: str) -> str:
 def month_end_balances(book: Book, excluded: list[str]) -> dict[str, list[tuple[str, float]]]:
     """Month-end balance per included account, like HomeBank's running balance.
 
-    Opening balance plus every non-void transaction (transfers included), for each
-    month from the account's first transaction to the last month in the file.
+    Opening balance plus every non-void transaction (transfers included). Every
+    account gets a value for every month from the first to the last month in the
+    file (before its first transaction that is its opening balance), so the
+    accounts can be added up month by month. Accounts with no transactions and no
+    opening balance are left out.
     """
     skip = {n.casefold() for n in excluded}
     txns = [t for t in book.transactions if not t.is_void and t.date is not None]
     if not txns:
         return {}
-    last = max(t.date for t in txns)
-    out = {}
+    first, last = min(t.date for t in txns), max(t.date for t in txns)
+    months = []
+    y, m = first.year, first.month
+    while (y, m) <= (last.year, last.month):
+        months.append((y, m))
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    per_account: dict[int, dict[tuple[int, int], float]] = {}
+    for t in txns:
+        per = per_account.setdefault(t.account_key, {})
+        per[(t.date.year, t.date.month)] = per.get((t.date.year, t.date.month), 0.0) + t.amount
+    out: dict[str, list[tuple[str, float]]] = {}
     for acc in sorted(book.accounts.values(), key=lambda a: (a.pos, a.key)):
-        if acc.name.casefold() in skip:
+        if acc.name.casefold() in skip or (acc.key not in per_account and not acc.initial):
             continue
-        mine = [t for t in txns if t.account_key == acc.key]
-        if not mine:
-            continue
-        per_month: dict[tuple[int, int], float] = {}
-        for t in mine:
-            per_month[(t.date.year, t.date.month)] = per_month.get((t.date.year, t.date.month), 0.0) + t.amount
-        y, m = min(t.date for t in mine).year, min(t.date for t in mine).month
+        per = per_account.get(acc.key, {})
         balance, series = acc.initial, []
-        while (y, m) <= (last.year, last.month):
-            balance += per_month.get((y, m), 0.0)
+        for y, m in months:
+            balance += per.get((y, m), 0.0)
             series.append((f"{y:04d}-{m:02d}", round(balance, 2)))
-            y, m = (y + 1, 1) if m == 12 else (y, m + 1)
-        out[acc.name] = series
+        name = acc.name if acc.name not in out else f"{acc.name} ({acc.key})"
+        out[name] = series
     return out
 
 
