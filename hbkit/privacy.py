@@ -45,6 +45,12 @@ class Summary:
 
     title: str
     rows: list[_Row] = field(default_factory=list)
+    #: Text from the file the user explicitly asked to see (e.g. --show-categories).
+    permitted: set[str] = field(default_factory=set)
+
+    def permit(self, texts: Iterable[str]) -> None:
+        """Allow these texts on screen. Only for options the user chose explicitly."""
+        self.permitted.update(texts)
 
     def heading(self, text: str) -> None:
         self.rows.append(_Row("heading", text))
@@ -56,6 +62,11 @@ class Summary:
         if isinstance(value, bool) or not isinstance(value, int):
             raise TypeError("Summary.count() accepts integers only")
         self.rows.append(_Row("count", label, value))
+
+    def year(self, label: str, value: int) -> None:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError("Summary.year() accepts integers only")
+        self.rows.append(_Row("year", label, value))
 
     def number(self, label: str, value: float, decimals: int = 1, unit: str = "") -> None:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -82,6 +93,8 @@ class Summary:
                 out.append(f"  {r.label}")
             elif r.kind == "count":
                 out.append(f"  {r.label:<{width}}  {r.value:>10,}".replace(",", " "))
+            elif r.kind == "year":
+                out.append(f"  {r.label:<{width}}  {r.value:>10}")
             elif r.kind == "number":
                 decimals, unit = r.extra
                 out.append(f"  {r.label:<{width}}  {r.value:>10.{decimals}f}{(' ' + unit) if unit else ''}")
@@ -116,8 +129,14 @@ class Terminal:
         print(self._safe(text), file=self.stream)
 
     def summary(self, summary: Summary) -> None:
-        for text in summary.render():
-            self.line(text)
+        saved = self.sensitive
+        if summary.permitted:
+            self.sensitive = [s for s in saved if s not in summary.permitted]
+        try:
+            for text in summary.render():
+                self.line(text)
+        finally:
+            self.sensitive = saved
 
 
 # --- paths ---------------------------------------------------------------------------------
