@@ -9,6 +9,9 @@ A small program that runs on your own computer and analyses your HomeBank file
   HomeBank rules from how you categorised your transactions in the past;
 * add the rules you approve to a **new copy** of your file. Your original file is
   never changed;
+* **prepare the files you download from your banks** (QIF or HomeBank CSV) before you
+  import them: it fills in categories from each account's own history — something
+  HomeBank's rules cannot do — and remembers which file belongs to which account;
 * make **reports** — an annual overview, category trends (with inflation) and a tax-year
   statement — as pages that open in your browser and work offline.
 
@@ -35,7 +38,8 @@ the set-up below in short form, plus what to do when something goes wrong.
   or account names, or amounts. (One exception you have to ask for: the option
   `--show-categories` of rule mining shows your category names.)
 * **Detailed results go into the `data\out` folder**, as CSV files you can open in Excel,
-  and reports go into `data\out\reports`. Report pages contain your data and open from
+  reports go into `data\out\reports` and bank files you prepare into `data\out\imports`
+  (with the record of which file went to which account in `data\import-accounts.json`). Report pages contain your data and open from
   your own disk; they load nothing from the internet.
 * The `data` folder is excluded from Git, so your file and results are never uploaded
   to GitHub, even by accident.
@@ -161,10 +165,14 @@ The pages, from left to right:
    * Other tabs show your existing rules with their scores, inconsistent descriptions,
      descriptions whose category **depends on the account**, overlapping rules, the
      back-test and the suggestions that were set aside.
-4. **Reports** — make a report (choose the years and options), then *Open report*. It
+4. **Imports** — prepare the files from your banks before you import them in HomeBank:
+   choose the month, add the files, check the account each one is linked to, then
+   *Prepare…* to see and edit the categories and save the prepared copy. See
+   [Preparing bank files for import](#preparing-bank-files-for-import).
+5. **Reports** — make a report (choose the years and options), then *Open report*. It
    also shows which settings file is used, and lists the reports you made before.
-5. **Results** — every result file of every analysis run, as sortable tables.
-6. **Export** — create the SQLite database.
+6. **Results** — every result file of every analysis run, as sortable tables.
+7. **Export** — create the SQLite database.
 
 *Show folder* buttons open the results folder in Windows Explorer.
 
@@ -376,6 +384,76 @@ it:
 
 ---
 
+## Preparing bank files for import
+
+HomeBank's assignment rules cannot be limited to one account, so descriptions that are
+the same in several accounts — interest and fees on different home loans, for
+example — cannot be categorised by a rule. But every file you download from a bank
+belongs to one account. So the toolkit writes the categories **into a copy of the file**
+before you import it, and HomeBank keeps them.
+
+### Each month
+
+1. Copy your latest HomeBank file into the `data` folder (the predictions learn from it,
+   so it should include last month's imports).
+2. In the browser interface, open **Imports** and choose the month.
+   * *Accounts for <month>* lists the accounts you import every month, with the latest
+     transaction HomeBank has for each and whether a file has been added. The ticks are
+     remembered; at first they are the open accounts with recent transactions.
+3. **Add files** (or drag them onto the page). The toolkit keeps a copy in
+   `data\out\imports\<month>\originals`; your downloads are not changed. It reads
+   **QIF** files and HomeBank's own **CSV** layout (8 columns: date; payment mode; info;
+   payee; memo; amount; category; tags).
+4. Check the **account** of each file. It is suggested from:
+   * the file name: the same name, or a similar one (dates and copy numbers such as
+     " (1)" ignored), that you linked to an account in an earlier month; or
+   * the contents: transactions already in an account (overlapping statements), the
+     same descriptions, and amounts close to the account's latest ones (this month's
+     interest on the same loan is close to last month's).
+   Change it if it is wrong; your choice is remembered for next month. If the contents
+   point to another account than the name, a *Check:* note says so.
+5. Click **Prepare…** for each file. A table shows every transaction with the category
+   the toolkit will write, and why:
+   * **this account's history**: the latest 10 transactions with the same description
+     (cleaned as in rule mining) in this account. When at least 3 exist and 80% of them
+     have one category, that category is used. Only recent ones count, so a change of
+     habit is followed;
+   * otherwise **all accounts** (shown in orange): when the description has at least 5
+     transactions over all accounts with 95% in one category;
+   * otherwise nothing; the row shows what your HomeBank rules would set on import.
+   Change or clear any category (the box suggests your categories). Transfers, split
+   transactions and rows that already have a category are left as they are. Rows that
+   may already be in HomeBank (same date, amount and description) are marked.
+6. **Save prepared file.** It goes to `data\out\imports\<month>\prepared\<name>-prepared.qif`
+   (or `.csv`). *Show in folder* opens it in Explorer.
+7. In HomeBank, use *File → Import* with the **prepared** file and import it into the
+   same account. HomeBank keeps the categories from the file: "auto from payee" and
+   "set category" rules only fill empty categories. Only an **overwrite** rule replaces
+   one; the table warns when that would happen.
+
+The *Import record* at the bottom lists every file, its account and month.
+
+### The same from PowerShell
+
+```powershell
+.\hb prepare-import --input "$HOME\Downloads\transact.csv"
+.\hb prepare-import --input "$HOME\Downloads\loan.qif" --account "Home loan" --month 2026-04
+```
+
+Without `--account`, the account remembered for the file name is used, or the one its
+contents point to clearly; otherwise it asks for `--account`. All suggested categories
+are written; the screen shows only counts. Use the browser to see and change them.
+
+### Good to know
+
+* Other formats (OFX, or a bank's own CSV layout) are not read yet. To add one, describe
+  its columns to Claude, or give a made-up example line — not a real statement.
+* HomeBank's import also lets you choose the account; choose the same one.
+* A category name the toolkit writes always exists in your HomeBank file (HomeBank
+  would otherwise create a new category).
+
+---
+
 ## Reports
 
 Reports are single web pages (with a CSV file where useful) saved in
@@ -527,6 +605,9 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 | `the settings file is not valid TOML (… line N …)` | Check that line in `data\settings.toml`: text in "double quotes", lists in [ ], one setting per line. |
 | `the CPI file named in the settings was not found` | Put the CSV next to `settings.toml`, or give its full path. |
 | A report says some names were not found | Check the spelling against HomeBank (capitals do not matter); see the list at the top of the report. |
+| `this is neither a QIF file nor a HomeBank CSV file` | The toolkit reads QIF and HomeBank's 8-column CSV only. Download that format from your bank, or ask Claude to add the bank's layout (describe the columns; do not send a real file). |
+| `could not tell which account this file belongs to` | Give it with `--account "name as in HomeBank"`, or choose it on the Imports page. |
+| `import-accounts.json in the data folder could not be read` | It was damaged (e.g. edited by hand). Rename it; a new import record is started. |
 
 ---
 
@@ -534,6 +615,8 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 
 * Python 3.13, standard library only; tests: `.venv\Scripts\python -m unittest discover -s tests -t .`
 * The `.xhb` format as learnt from HomeBank's source code: [docs/xhb-format.md](docs/xhb-format.md)
+* Bank files (QIF, HomeBank CSV), what HomeBank does when importing them, and how the
+  toolkit prepares them: [docs/import-files.md](docs/import-files.md)
 * The SQLite tables and views, including the shared report views (`r_lines`, `r_flows`,
   `r_group_lines`, `r_category_period`, `r_period_totals`): [docs/sqlite-schema.md](docs/sqlite-schema.md).
   With a settings file, `export-sqlite` adds those report views to `homebank.sqlite` too.

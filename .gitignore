@@ -17,6 +17,11 @@
 *.sqlite3
 *.db
 !/tests/fixtures/**/*.xhb
+# Bank statement files (import files are kept under data/ only)
+*.qif
+*.ofx
+*.qfx
+!/tests/fixtures/**/*.qif
 
 # --- Python -----------------------------------------------------------------
 .venv/

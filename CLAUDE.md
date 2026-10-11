@@ -97,11 +97,14 @@ hbkit/analyses/              one module per analysis (ANALYSIS = ...), auto-disc
 hbkit/reports/               reporting layer: settings.py (TOML), data.py (r_* views, periods,
                              balances), base.py (Report plugins, runner), html.py (page, charts);
                              one module per report (REPORT = ...), auto-discovered
+hbkit/imports/               preparing bank files for import: formats.py (QIF, HomeBank CSV: read,
+                             add categories to a copy), predict.py (per-account categories, account
+                             guess), memory.py (file name -> account record), session.py (month folders)
 hbkit/ui/server.py           browser interface: stdlib HTTP server on 127.0.0.1, JSON API, security checks
 hbkit/ui/static/             the page (index.html, app.js, style.css); no external resources
 hbkit/fixtures/generator.py  synthetic .xhb files for tests and trying things out
 tests/                       unittest; fixtures/homebank_example = HomeBank's own example.xhb (GPL)
-docs/                        xhb-format.md, sqlite-schema.md, adding-an-analysis.md
+docs/                        xhb-format.md, import-files.md, sqlite-schema.md, adding-an-analysis.md
 ```
 
 ## Adding a report
@@ -127,7 +130,12 @@ Built: reader + structure report, writer, SQLite export, analysis framework, rul
 mining + apply-rules (with account rules for descriptions whose category depends on the
 account, `rule_transactions.csv`, `account_dependent.csv`), browser interface (`hb ui`;
 the rule review page shows each rule's transactions and downloads CSVs in the browser),
-`INSTRUCTIONS.txt` for people who download the ZIP, and the reporting layer (settings,
+`INSTRUCTIONS.txt` for people who download the ZIP, the import preparation tool (Imports
+page and `prepare-import`: categories per account written into a copy of a bank's QIF or
+HomeBank CSV file before import; record of file names and accounts in the data folder's
+`import-accounts.json`; bank file formats in docs/import-files.md, learnt from HomeBank's
+import code plus the owner's description of their two banks' layouts — never put real
+statement lines in tests or docs), and the reporting layer (settings,
 `r_*` views, report framework) with three reports: annual-overview, category-trends,
 tax-year-statement (also on the Reports page of the browser interface). The owner is a
 Windows user (HomeBank 5.8.5 file, 27k transactions, 46 accounts, 163 categories);
