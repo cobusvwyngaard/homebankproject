@@ -46,6 +46,25 @@ def cmd_structure(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_sqlite(args: argparse.Namespace) -> int:
+    from .export.sqlite import export_sqlite
+    from .xhb.reader import read_file
+
+    book = read_file(_input_path(args))
+    out = Path(args.output) if args.output else Path(args.out) / "homebank.sqlite"
+    counts = export_sqlite(book, out)
+    s = Summary("SQLite export")
+    s.heading("Rows written")
+    for table in ("transactions", "splits", "accounts", "categories", "payees", "tags", "rules", "templates"):
+        s.count(table, counts[table])
+    if book.warnings:
+        s.count("Reader warnings (see the structure command)", sum(book.warnings.values()))
+    s.output("Database", out)
+    s.note("The schema is described in docs/sqlite-schema.md.")
+    Terminal(book.sensitive_strings()).summary(s)
+    return 0
+
+
 def cmd_generate_sample(args: argparse.Namespace) -> int:
     from .fixtures.generator import GeneratorOptions, generate
 
@@ -83,6 +102,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("structure", help="show the file's structure (versions, element and attribute counts; no values)")
     _add_file_option(p)
     p.set_defaults(handler=cmd_structure)
+
+    p = sub.add_parser("export-sqlite", help="export the file to a SQLite database (replaces the previous export)")
+    _add_file_option(p)
+    _add_out_option(p)
+    p.add_argument("--output", metavar="PATH", help="database file (default: data/out/homebank.sqlite)")
+    p.set_defaults(handler=cmd_export_sqlite)
 
     p = sub.add_parser("generate-sample", help="write a synthetic HomeBank file to try the toolkit on")
     _add_out_option(p)
