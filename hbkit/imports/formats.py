@@ -85,14 +85,16 @@ class ImportTxn:
 @dataclass
 class ImportFile:
     name: str
-    format: str  # "qif", "csv" (HomeBank's layout) or "bank-csv" (a bank's own layout, converted)
+    format: str  # "qif", "csv" (HomeBank's layout), "bank-csv" or "pdf-statement" (converted)
     raw: bytes
     encoding: str  # "utf-8" or "cp1252"
     txns: list[ImportTxn]
     date_order: str = "DMY"  # DMY, MDY or YMD
     qif_type: str = ""  # QIF: Bank, CCard, ...
     separator: str = ""  # CSV
-    layout: str = ""  # bank CSV: the columns used, e.g. "Value Date, Description, Amount"
+    layout: str = ""  # bank CSV or PDF: the columns used, e.g. "Value Date, Description, Amount"
+    #: PDF statements: digit strings of 6-16 digits in the document (one is usually the account number)
+    numbers: list[str] = field(default_factory=list)
     #: line numbers HomeBank would not read as transactions (no values)
     problems: list[int] = field(default_factory=list)
     #: where a category goes, per transaction: ("insert", line) before that line,
@@ -188,7 +190,11 @@ def _text(line: bytes, encoding: str) -> str:
 
 
 def read_import_file(name: str, raw: bytes) -> ImportFile:
-    """Read a QIF, HomeBank CSV or bank CSV file. The format is detected from the contents."""
+    """Read a QIF, HomeBank CSV or bank CSV file, or a PDF statement. The format is detected from the contents."""
+    if raw.startswith(b"%PDF-"):
+        from .statement import read_pdf_statement  # here: statement.py imports this module
+
+        return read_pdf_statement(name, raw)
     encoding = _decode(raw)
     lines = raw.splitlines(keepends=True)
     first = next((_text(x, encoding).strip() for x in lines if x.strip()), "")
@@ -199,8 +205,8 @@ def read_import_file(name: str, raw: bytes) -> ImportFile:
     f = _read_csv(name, raw, lines, encoding) or _read_bank_csv(name, raw, encoding)
     if f is None:
         raise ImportFormatError("this is neither a QIF file, a HomeBank CSV file (8 columns: date; payment mode; "
-                                "info; payee; memo; amount; category; tags) nor a bank CSV with a header row "
-                                "naming its date, description and amount columns")
+                                "info; payee; memo; amount; category; tags), a bank CSV with a header row "
+                                "naming its date, description and amount columns, nor a PDF statement")
     return f
 
 
@@ -401,10 +407,10 @@ def with_categories(f: ImportFile, categories: dict[int, str]) -> bytes:
     """The file with these categories (transaction index -> full category name) added.
 
     Only transactions without a category, transfer or split can take one. The result
-    is read back and compared with the original before it is returned. A bank CSV is
-    converted to HomeBank CSV.
+    is read back and compared with the original before it is returned. A bank CSV or a
+    PDF statement is converted to HomeBank CSV.
     """
-    if f.format == "bank-csv":
+    if f.format in ("bank-csv", "pdf-statement"):
         return _to_homebank_csv(f, categories)
     lines = f.lines
     inserts: dict[int, list[bytes]] = {}
@@ -449,7 +455,7 @@ def _to_homebank_csv(f: ImportFile, categories: dict[int, str]) -> bytes:
         amount = f"{cents / 100:.2f}" if abs(t.amount * 100 - cents) < 1e-6 else repr(t.amount)
         lines.append(";".join([
             t.date.strftime("%d-%m-%Y"),
-            str(t.paymode), "", _csv_field(t.payee), _csv_field(t.memo), amount,
+            str(t.paymode), _csv_field(t.info), _csv_field(t.payee), _csv_field(t.memo), amount,
             _csv_field(categories.get(t.index, "")), "",
         ]))
     data = ("\r\n".join(lines) + "\r\n").encode("utf-8")

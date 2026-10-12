@@ -453,13 +453,25 @@ before you import it, and HomeBank keeps them.
      HomeBank's CSV layout: dates as day-month-year, the description as memo, the
      beneficiary column as payee, the bank's transaction type as the payment mode
      (debit order, transfer, EFT, card, fee …), and the categories. The time column is
-     not used.
+     not used;
+   * a **PDF statement** whose transaction table has a header row with a date column, a
+     description column and debit/credit columns (or one amount column), such as
+     "Date", "Description", "Fees", "Debits", "Credits", "Balance". This is also
+     converted to HomeBank CSV: debits and fees as money out, credits as money in, a
+     reference column as *info*, and charges marked `*` (and amounts from a fees column)
+     with the payment mode "fee". A row with both a fee and another amount becomes two
+     transactions. The statement is **checked** before anything is written: every
+     amount must lead from one printed balance to the next, and the opening balance plus
+     all amounts to the closing balance. If not, the toolkit refuses the file rather than
+     import a wrong amount or sign.
 4. Check the **account** of each file. It is suggested from:
    * the file name: the same name, or a similar one (dates and copy numbers such as
      " (1)" ignored), that you linked to an account in an earlier month; or
    * the contents: transactions already in an account (overlapping statements), the
      same descriptions, and amounts close to the account's latest ones (this month's
      interest on the same loan is close to last month's).
+   * for a PDF statement, first the **account number** printed on it, when it matches the
+     account number of exactly one account in HomeBank (*Account details* in HomeBank).
    Change it if it is wrong; your choice is remembered for next month. If the contents
    point to another account than the name, a *Check:* note says so.
 5. Click **Prepare…** for each file. A table shows every transaction with the category
@@ -475,7 +487,8 @@ before you import it, and HomeBank keeps them.
    transactions and rows that already have a category are left as they are. Rows that
    may already be in HomeBank (same date, amount and description) are marked.
 6. **Save prepared file.** It goes to `data\out\imports\<month>\prepared\<name>-prepared.qif`
-   (or `.csv`). *Show in folder* opens it in Explorer.
+   (or `.csv`; a PDF statement becomes `<name>-prepared.csv`). *Show in folder* opens it
+   in Explorer.
 7. In HomeBank, use *File → Import* with the **prepared** file and import it into the
    same account. HomeBank keeps the categories from the file: "auto from payee" and
    "set category" rules only fill empty categories. Only an **overwrite** rule replaces
@@ -490,8 +503,9 @@ The *Import record* at the bottom lists every file, its account and month.
 .\hb prepare-import --input "$HOME\Downloads\loan.qif" --account "Home loan" --month 2026-04
 ```
 
-Without `--account`, the account remembered for the file name is used, or the one its
-contents point to clearly; otherwise it asks for `--account`. All suggested categories
+Without `--account`, the account whose number is printed on a PDF statement is used, then
+the account remembered for the file name, or the one its contents point to clearly;
+otherwise it asks for `--account`. All suggested categories
 are written; the screen shows only counts. Use the browser to see and change them.
 
 ### Good to know
@@ -499,6 +513,10 @@ are written; the screen shows only counts. Use the browser to see and change the
 * OFX is not read yet, nor bank CSV files whose header names other columns (for
   example separate debit and credit columns). To add one, describe its columns to
   Claude, or give a made-up example line — not a real statement.
+* PDF statements: password-protected PDFs and scanned statements (pictures of pages,
+  without text) cannot be read; download those as CSV or QIF. Another bank's PDF layout
+  may need adjusting: if a statement is refused, tell Claude the error message and the
+  column headings of its transaction table — not its contents.
 * For a bank CSV, everything in the "Beneficiary or CardHolder" column becomes the
   payee. If your card purchases carry your own name there, tell Claude, and it can be
   left out for those.
@@ -702,7 +720,10 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 | `the settings file is not valid TOML (… line N …)` | Check that line in `data\settings.toml`: text in "double quotes", lists in [ ], one setting per line. |
 | `the CPI file named in the settings was not found` | Put the CSV next to `settings.toml`, or give its full path. |
 | A report says some names were not found | Check the spelling against HomeBank (capitals do not matter); see the list at the top of the report. |
-| `this is neither a QIF file, a HomeBank CSV file … nor a bank CSV with a header row …` | The toolkit reads QIF, HomeBank's 8-column CSV, and bank CSV files whose first row names the date, description and amount columns. For another layout, ask Claude to add it (describe the columns; do not send a real file). |
+| `this is neither a QIF file, a HomeBank CSV file … nor a PDF statement` | The toolkit reads QIF, HomeBank's 8-column CSV, bank CSV files whose first row names the date, description and amount columns, and PDF statements. For another layout, ask Claude to add it (describe the columns; do not send a real file). |
+| `this PDF is password-protected …` or `this PDF has no text layer …` | Download the statement without a password, or as CSV or QIF. |
+| `no transaction table was found in this PDF …` | The toolkit looks for a header row with a date, a description and debit/credit (or amount) columns. Tell Claude the column headings of the statement's table. |
+| `the amounts in this statement do not add up to its balances …` | The table was not read correctly, so nothing was imported. Tell Claude the message and the column headings (not the amounts), or use the bank's CSV download for that month. |
 | `could not tell which account this file belongs to` | Give it with `--account "name as in HomeBank"`, or choose it on the Imports page. |
 | `the HomeBank file has changed since the rules were listed` | Reload the Fill categories page (or run `fill-categories` without `--review`) and choose again. |
 | `the HomeBank file has changed since the transfers were listed` | List the transfers again (*Find again* on the Transfers page, or run `link-transfers` without `--review`). |

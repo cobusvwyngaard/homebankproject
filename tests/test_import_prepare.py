@@ -12,7 +12,8 @@ from hbkit.imports.formats import read_import_file
 from hbkit.imports.memory import ImportMemory, check_month, name_key
 from hbkit.imports.predict import History, clear_winner, guess_accounts, predict
 from hbkit.imports.session import (
-    add_file, file_info, month_accounts, month_files, prepare, prepared_name, preview, safe_name, save_prepared,
+    account_by_number, add_file, file_info, month_accounts, month_files, prepare, prepared_name, preview, safe_name,
+    save_prepared,
 )
 from hbkit.xhb.reader import read_bytes
 
@@ -171,6 +172,7 @@ class FileTests(TempDirTestCase):
         self.assertEqual(safe_name("..\\..\\Loan A.qif"), "Loan A.qif")
         self.assertEqual(safe_name("../x/../y:z?.csv"), "y_z_.csv")
         self.assertEqual(prepared_name("Loan_A.qif"), "Loan_A-prepared.qif")
+        self.assertEqual(prepared_name("Statement.PDF"), "Statement-prepared.csv")  # prepared as HomeBank CSV
         with self.assertRaises(HbkitError):
             safe_name("..")
 
@@ -266,6 +268,29 @@ class PrepareCommandTests(TempDirTestCase):
         prepared = next((self.tmp / "out").rglob("bank-prepared.qif")).read_bytes()
         self.assertIn(f"L{SENTINEL}CAT_Property A:{SENTINEL}CAT_Bond interest".encode(), prepared)
 
+    def test_pdf_statement_privacy(self):
+        from hbkit.fixtures.generator import SENTINEL
+        from hbkit.fixtures.statement_pdf import SAMPLE_ROWS, StatementOptions, StatementRow, statement_pdf
+
+        src = self.write_sample("s.xhb", sentinel=True)
+        bank = self.tmp / "statement.pdf"
+        rows = SAMPLE_ROWS + [StatementRow("26/03/2026", f"{SENTINEL}PDF PURCHASE", debit=12.0, reference="SENT1")]
+        bank.write_bytes(statement_pdf(rows))
+        code, out, err = self.run_prepare(src, bank)
+        self.assertEqual(code, 0, err)
+        self.assertIn("recognised by the account number", out)
+        self.assertNoSentinel(out, err)
+        self.assertNotIn("PDF PURCHASE", out + err)
+        prepared = self.tmp / "out" / "imports" / "2026-03" / "prepared" / "statement-prepared.csv"
+        self.assertIn(f"{SENTINEL}PDF PURCHASE".encode(), prepared.read_bytes())
+
+        bad = self.tmp / "bad.pdf"
+        bad.write_bytes(statement_pdf(rows, StatementOptions(wrong_balance_at=7)))
+        code, out, err = self.run_prepare(src, bad)
+        self.assertEqual(code, 2)
+        self.assertIn("do not add up", err)
+        self.assertNoSentinel(out, err)
+
 
 class BankCsvPredictionTests(TempDirTestCase):
     def test_categories_for_a_bank_csv(self):
@@ -282,3 +307,30 @@ class BankCsvPredictionTests(TempDirTestCase):
         again = read_import_file("cheque-prepared.csv", data)
         self.assertEqual(again.format, "csv")
         self.assertEqual(sum(1 for t in again.txns if t.category), n)
+
+
+class PdfStatementPrepareTests(TempDirTestCase):
+    def test_account_number_and_prepared_csv(self):
+        from hbkit.fixtures.statement_pdf import SAMPLE_ROWS, statement_pdf
+
+        book = read_bytes(sample().data)  # the cheque account's number is 62000000001
+        self.assertEqual(account_by_number(book, ["62000000001", "12345678"]), ACC_CHEQUE)
+        self.assertIsNone(account_by_number(book, ["62000000002"]))
+        self.assertIsNone(account_by_number(book, []))
+
+        out = self.tmp / "out"
+        memory = ImportMemory(self.tmp / "m.json")
+        raw = statement_pdf(SAMPLE_ROWS)
+        path = add_file(out, "2026-03", "statement.pdf", raw)
+        memory.link("2026-02", "statement.pdf", ACC_SAVINGS, "Savings")  # remembered, but the number says otherwise
+        info = file_info(book, History(book), memory, "2026-03", path)
+        self.assertEqual((info.suggested, info.format, info.transactions), (ACC_CHEQUE, "pdf-statement", 8))
+        self.assertIn("account number", info.reason)
+
+        f = read_import_file(path.name, path.read_bytes())
+        data, n = prepare(book, f, {1: "Salary"})
+        target = save_prepared(path, data)
+        self.assertEqual(target.name, "statement-prepared.csv")
+        self.assertEqual(path.read_bytes(), raw)
+        again = read_import_file(target.name, target.read_bytes())
+        self.assertEqual((again.format, len(again.txns), n), ("csv", 8, 1))

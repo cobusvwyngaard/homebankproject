@@ -101,10 +101,13 @@ hbkit/reports/               reporting layer: settings.py (TOML), data.py (r_* v
 hbkit/imports/               preparing bank files for import: formats.py (QIF, HomeBank CSV: read,
                              add categories to a copy), predict.py (per-account categories, account
                              guess), memory.py (file name -> account record), session.py (month folders),
-                             transfers.py (find unlinked transfer pairs, link them in a new copy)
+                             transfers.py (find unlinked transfer pairs, link them in a new copy),
+                             pdf.py (PDF text with positions, stdlib only), statement.py (a PDF
+                             statement's transaction table -> transactions, balance-chain check)
 hbkit/ui/server.py           browser interface: stdlib HTTP server on 127.0.0.1, JSON API, security checks
 hbkit/ui/static/             the page (index.html, app.js, style.css); no external resources
 hbkit/fixtures/generator.py  synthetic .xhb files for tests and trying things out
+hbkit/fixtures/statement_pdf.py  synthetic PDF bank statements (made-up content, three font variants)
 tests/                       unittest; fixtures/homebank_example = HomeBank's own example.xhb (GPL)
 docs/                        xhb-format.md, import-files.md, sqlite-schema.md, adding-an-analysis.md
 ```
@@ -134,11 +137,14 @@ account, `rule_transactions.csv`, `account_dependent.csv`), browser interface (`
 the rule review page shows each rule's transactions and downloads CSVs in the browser),
 `INSTRUCTIONS.txt` for people who download the ZIP, the import preparation tool (Imports
 page and `prepare-import`: categories per account written into a copy of a bank's QIF or
-HomeBank CSV file before import, and bank CSV layouts with a header row converted to
-HomeBank CSV; record of file names and accounts in the data folder's
+HomeBank CSV file before import, and bank CSV layouts with a header row and PDF
+statements converted to HomeBank CSV; a PDF statement's account number suggests its
+account; record of file names and accounts in the data folder's
 `import-accounts.json`; bank file formats in docs/import-files.md, learnt from HomeBank's
 import code plus the owner's description of their two banks' layouts — never put real
-statement lines in tests or docs), transfer linking after import (Transfers page and
+statement lines in tests or docs, nor any value (amount, date, reference, number) copied
+from a file the owner uploaded, not even as an example; check new fixtures against the
+upload before committing), transfer linking after import (Transfers page and
 `link-transfers`; owner decisions: 4 days apart by default, pairs start unticked with a
 select-all, transactions without another side are only listed, never created), filling
 empty categories with chosen rules (Fill categories page and `fill-categories`; only empty

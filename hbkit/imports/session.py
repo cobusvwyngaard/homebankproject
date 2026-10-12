@@ -43,8 +43,18 @@ def safe_name(name: str) -> str:
 
 
 def prepared_name(name: str) -> str:
+    """<name>-prepared.<ext>; a PDF statement is prepared as HomeBank CSV, so .csv."""
     stem, dot, ext = name.rpartition(".")
-    return f"{stem}-prepared.{ext}" if dot and stem else f"{name}-prepared"
+    if not (dot and stem):
+        return f"{name}-prepared"
+    return f"{stem}-prepared.{'csv' if ext.lower() == 'pdf' else ext}"
+
+
+def account_by_number(book: Book, numbers: list[str]) -> int | None:
+    """The account whose number (digits only, at least 6) appears in a statement, if exactly one."""
+    found = {acc.key for acc in book.accounts.values()
+             if len(digits := re.sub(r"\D", "", acc.number or "")) >= 6 and digits in numbers}
+    return found.pop() if len(found) == 1 else None
 
 
 def sha256(raw: bytes) -> str:
@@ -138,7 +148,10 @@ def file_info(book: Book, history: History, memory: ImportMemory, month: str, pa
         reason = "linked by you"
     else:
         remembered = memory.predict(path.name, month)
-        if remembered and remembered[0] in book.accounts:
+        by_number = account_by_number(book, f.numbers) if f.numbers else None
+        if by_number is not None:
+            suggested, reason = by_number, "its account number matches this account in HomeBank"
+        elif remembered and remembered[0] in book.accounts:
             suggested, reason = remembered
         elif best:
             suggested, reason = best.account, "from its contents: " + "; ".join(best.reasons)

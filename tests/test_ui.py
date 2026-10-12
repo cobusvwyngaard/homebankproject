@@ -507,6 +507,39 @@ class FillPageTests(ServerTestCase):
         self.assertIsNone(self.api("/api/fill/apply", {"rules": []})["output"])
 
 
+class PdfStatementImportTests(ServerTestCase):
+    def test_upload_and_prepare_a_pdf_statement(self):
+        import base64
+
+        from hbkit.fixtures.generator import ACC_CHEQUE
+        from hbkit.fixtures.statement_pdf import SAMPLE_ROWS, statement_pdf
+        from hbkit.imports.formats import read_import_file
+
+        raw = statement_pdf(SAMPLE_ROWS)
+        self.api("/api/import/upload", {"month": "2026-03", "name": "March.pdf",
+                                        "content": base64.b64encode(raw).decode()})
+        (f,) = self.api("/api/import/month?month=2026-03")["files"]
+        self.assertEqual((f["format"], f["suggested"], f["transactions"]), ("pdf-statement", ACC_CHEQUE, 8))
+        preview = self.api(f"/api/import/preview?month=2026-03&file=March.pdf&account={ACC_CHEQUE}")
+        self.assertEqual(len(preview["rows"]), 8)
+        done = self.api("/api/import/prepare", {"month": "2026-03", "file": "March.pdf", "account": ACC_CHEQUE,
+                                                "categories": {"1": "Salary"}})
+        self.assertTrue(done["rel"].endswith("March-prepared.csv"))
+        prepared = read_import_file("x.csv", (self.out / done["rel"]).read_bytes())
+        self.assertEqual((prepared.format, len(prepared.txns)), ("csv", 8))
+
+    def test_unreadable_pdf_is_refused_with_a_reason(self):
+        import base64
+
+        from hbkit.fixtures.statement_pdf import SAMPLE_ROWS, StatementOptions, statement_pdf
+
+        raw = statement_pdf(SAMPLE_ROWS, StatementOptions(wrong_balance_at=1))
+        status, body, _ = self.request("POST", "/api/import/upload", {"month": "2026-03", "name": "bad.pdf",
+                                                                     "content": base64.b64encode(raw).decode()})
+        self.assertEqual(status, 400)
+        self.assertIn("do not add up", body["error"])
+
+
 class BankCsvImportTests(ServerTestCase):
     def test_upload_and_prepare_a_bank_csv(self):
         import base64

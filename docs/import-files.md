@@ -2,8 +2,9 @@
 
 What the toolkit knows about the files HomeBank imports, and what it does with them.
 HomeBank's behaviour comes from its source code (`hb-import.c`, `hb-import-qif.c`,
-`hb-import-csv.c`, `hb-encoding.c`, 5.10.3). The owner's two banks' layouts were
-described from example files; only their structure is recorded here.
+`hb-import-csv.c`, `hb-encoding.c`, 5.10.3), the PDF format from the PDF specification
+(ISO 32000). The owner's banks' layouts were described from example files; only their
+structure is recorded here.
 
 ## Formats read
 
@@ -85,10 +86,76 @@ the category; no tags. Separator `;`, UTF-8 without a byte-order mark (a mark wo
 the first date), Windows line endings; fields containing `;` or `"` are quoted. Transfers
 are not marked as internal transfers: they are linked after the import (Transfers page).
 
+### PDF statements (converted)
+
+HomeBank cannot import PDF files; the toolkit reads the statement's transaction table
+and converts it to HomeBank CSV as for a bank CSV (above).
+
+**Reading the text** (`hbkit/imports/pdf.py`, standard library only): the objects of the
+file (also in object streams), the page tree, streams compressed with FlateDecode (or
+ASCIIHex/ASCII85), and the text operators of each page's content stream with the
+graphics state. Characters come from the font's encoding: a ToUnicode map, `/Differences`,
+WinAnsi/Standard encoding, or the built-in encoding of an embedded Type 1 font
+(`dup <code> /<glyph name> put`); glyph names are turned into characters. Glyph widths
+give the end of each text, so right-aligned amounts can be placed under their column.
+Glyphs are grouped into lines (same baseline) and the lines into chunks (a gap wider than
+about a space separates two chunks).
+
+Refused, with a message: password-protected PDFs (an `/Encrypt` entry), PDFs without a
+text layer (scanned pages), and other compressions.
+
+**Finding the table** (`hbkit/imports/statement.py`): a line whose chunks are column
+headings, with at least a date, a description and debit/credit (or one amount) column.
+Headings recognised (case, "(R)" and the like ignored):
+
+| Meaning | Headings |
+|---|---|
+| date | Date, Transaction Date, Value Date, Posting Date, Trans Date |
+| description | Description, Details, Narrative, Transaction Description/Details |
+| reference (→ info) | Tran list no, Reference, Ref, Ref no, Reference no |
+| fees | Fees, Fee, Charges, Service fee |
+| debit | Debits, Debit, Money out, Withdrawals, Payments |
+| credit | Credits, Credit, Money in, Deposits, Receipts |
+| amount (signed) | Amount |
+| balance | Balance, Running balance |
+
+Two headings printed close together (one chunk) are split. Text cells belong to the
+column under whose heading they start; amounts to the column whose heading they end
+under (right-aligned). The table continues on every page where the header is repeated,
+and ends at a "Closing balance" line, a line in another font size, a line starting left
+of the table, or a large gap (a footer).
+
+**Rows**: a line without a date and without amounts continues the description of the
+row above. "Opening balance", "Closing balance" and "brought/carried forward" lines are
+not transactions. Debits and fees are money out, credits money in; in a single amount
+column, a leading or trailing `-` or `Dr` means money out, `Cr` money in. Amounts marked `*`
+(charges including VAT) and amounts in the fees column get payment mode 10 (fee); a row
+with a fee and another amount gives two transactions, the fee with "(fee)" after the
+description. The reference column becomes *info*.
+
+**Check**: each amount must lead from the previous printed balance to the balance
+printed on its row, and the opening balance plus all amounts to the closing balance
+(within half a cent). Any difference means the layout was misread, so the file is
+refused and nothing is imported.
+
+**Account**: digit strings of 6 to 16 digits anywhere in the statement (with spaces or
+hyphens between digits removed) are compared with the account numbers in the HomeBank
+file (*number* attribute of `<account>`); exactly one match suggests that account.
+
+The owner's example statement: PDF 1.4, compressed content, embedded Type 1 fonts with
+their own built-in encodings and no ToUnicode maps; a summary page with the account
+number; then a bank-charges table and the transaction table with columns *Tran list no,
+Date, Description, Fees (R), Debits (R), Credits (R), Balance (R)*, dates `DD/MM/YYYY`,
+amounts right-aligned with thousands separators, charges marked ` *`, an opening balance
+line at the top and a closing balance line at the end. The synthetic statements in
+`hbkit/fixtures/statement_pdf.py` follow this structure with made-up content, in three
+font variants (standard font, embedded font with a scrambled built-in encoding, composite
+font with a ToUnicode map).
+
 ### Not read (yet)
 
-OFX/QFX, and bank CSV layouts with other column names (for example separate debit and
-credit columns).
+OFX/QFX, bank CSV layouts with other column names (for example separate debit and
+credit columns), password-protected or scanned PDF statements.
 
 ## What HomeBank does on import
 
@@ -130,6 +197,10 @@ numbers that tell otherwise identical transactions in two accounts apart.
 
 ## Which account a file belongs to
 
+A link you made for this month comes first. Otherwise:
+
+0. For a PDF statement: the account number printed on it, when it equals the number of
+   exactly one account in the HomeBank file.
 1. The import record (`data/import-accounts.json`): the same file name, then a similar
    one (lower case; dates, month names, copy markers such as " (1)" and "- Copy", and a
    time after a date removed; other numbers kept), from the latest earlier month.

@@ -131,7 +131,10 @@ def cmd_prepare_import(args: argparse.Namespace) -> int:
     else:
         remembered = memory.predict(source.name, month)
         best = clear_winner(guess_accounts(history, f))
-        if remembered and remembered[0] in book.accounts:
+        by_number = S.account_by_number(book, f.numbers) if f.numbers else None
+        if by_number is not None:
+            account, how = by_number, "recognised by the account number in the statement"
+        elif remembered and remembered[0] in book.accounts:
             account, how = remembered[0], "remembered for this file name"
         elif best:
             account, how = best.account, "recognised from its contents"

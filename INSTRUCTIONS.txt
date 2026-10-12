@@ -95,9 +95,9 @@ Fill categories then applies the rules you tick to every transaction
 that has no category yet, again in a NEW copy.
 
 Each month, the Imports page prepares the files you download from your
-banks (QIF or HomeBank CSV): choose the month, add the files, check the
-account of each, click Prepare... and import the PREPARED copy in
-HomeBank (File > Import). See README.md, "Preparing bank files for
+banks (QIF, CSV or PDF statements): choose the month, add the files,
+check the account of each, click Prepare... and import the PREPARED copy
+in HomeBank (File > Import). See README.md, "Preparing bank files for
 import". Afterwards, save in HomeBank, copy the file into the data
 folder again, and use the Transfers page to link transfers between
 your own accounts in a new copy (README.md, "Linking transfers").
