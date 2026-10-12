@@ -169,6 +169,65 @@ credit columns), password-protected or scanned PDF statements.
 
 So a category written into the file survives, except against an overwrite rule.
 
+In more detail (`hb_import_option_apply`, `hb_import_convert_txn`, `hb_import_apply` in
+hb-import.c; `transaction_add` in hb-transaction.c; defaults from hb-preferences.c):
+
+* **Fields.** QIF: `P` payee and `N` number are stripped of spaces, `M` memo is kept as
+  it is (trailing spaces included); with the default options the memo is imported and
+  payee and memo are not swapped. HomeBank CSV: payee and category are stripped, memo and
+  info kept as they are; payment mode 5 becomes 4. No capitalising by default ("ucfirst"
+  off).
+* **Payee** (`da_pay_get_by_name`): the stripped name is compared with existing payee
+  names with `strcasecmp` (capitals of A–Z ignored); an empty name means no payee. A
+  name that is not found becomes a new payee with the next key (highest + 1).
+* **Category**: an `L`/column 7 value starting with `[` is a transfer to that account
+  (created if it does not exist); otherwise the category by full name, created if new.
+* **Flags**: income (2) when the amount is positive (`da_transaction_set_flag`); status
+  cleared or reconciled only from a QIF `C` line; "Import as pending" (5.9+) adds flag 512.
+* **Closed accounts** are refused by `transaction_add`; it inserts each transaction after
+  the account's last one with the same or an earlier date. When HomeBank opens a file it
+  sorts every account's transactions by date anyway, so their order in the file does not
+  matter.
+* **Duplicates** in the import assistant (both are unticked, and can be ticked):
+  "similar in the target account" — same account, same amount, date within the date
+  tolerance (preference "DayGap", 0 by default), memo not compared
+  (`hb_import_gen_txn_check_target_similar`); "similar in the import" — same account,
+  date, amount, memo, payee, category and number (`hb_import_gen_txn_check_duplicate`).
+* **Automation**: "Enrich with payee default" (off by default) fills an empty category
+  and payment mode from the payee; "Run automatic assignment rules" (off by default)
+  runs `transaction_auto_assign` on the imported transactions only. For each
+  transaction all rules are matched first (memo, or the payee's name), then each
+  matching rule in position order sets payee, category, payment mode or tags when empty
+  ("set"), or always ("overwrite").
+
+## Importing into the HomeBank file (hbkit/imports/bulk.py)
+
+The toolkit can add a month's linked files to the HomeBank file itself (a new copy, or
+the file after a backup). It follows the steps above, with these choices:
+
+* Source per file: the prepared copy when it was made for the file's current link,
+  otherwise the original with the suggested categories (`month_sources` in session.py).
+* Categories are never created: a name that is not in the file is left empty and noted.
+  Tags from a CSV tag column are kept only when they exist.
+* QIF transfers (`L[Account]`) and CSV payment-mode-5 lines come in as ordinary
+  transactions (no transfer link); they are linked afterwards with link-transfers.
+  Split transactions are not imported.
+* Duplicates: "already in HomeBank" as HomeBank's target check (same account and amount,
+  date within the tolerance), but **one-to-one**: an existing transaction accounts for
+  one imported transaction only (the closest date, then the same memo). "Twice in these
+  files": same account, date, amount, memo, payee and info in two **different** files;
+  unlike HomeBank, repeats within one file are not flagged.
+* Automation as HomeBank's, with the options shown (rules on, payee defaults off by
+  default). A new payee whose name a rule replaces is not added (HomeBank adds it).
+  Cheque numbers are not carried into the account; a QIF `C` line's cleared/reconciled
+  status is not read (no status); flags 512 (pending) and 1024 (past) are not set.
+* New `<pay>` elements go after the existing payees; new `<ope>` elements after the
+  account's last transaction with the same or an earlier date (else after the last
+  transaction in the file), in date order. All new elements are formatted by
+  serialise.py, and the result is checked element by element before it is saved.
+* The import record notes per file when it was imported, how many transactions and into
+  which file.
+
 ## What the toolkit writes
 
 * Only categories: a new `L` line just before the `^` of a QIF transaction (or the text

@@ -206,6 +206,36 @@ def prepare(book: Book, f: ImportFile, choices: dict[int, str]) -> tuple[bytes, 
     return with_categories(f, resolved), len(resolved)
 
 
+def month_sources(book: Book, history: History, memory: ImportMemory, out_root: Path, month: str):
+    """The month's files that are linked to an account, ready to import, and the names of
+    those that are not linked yet.
+
+    A file's prepared copy is used when it was made for its current link (it holds the
+    categories you chose); otherwise the file itself, with the toolkit's suggestions.
+    """
+    from .bulk import Source
+
+    sources, not_linked = [], []
+    for path in month_files(out_root, month):
+        link = memory.get(month, path.name)
+        if not link:
+            not_linked.append(path.name)
+            continue
+        account = int(link["account"])
+        prepared = path.parent.parent / "prepared" / prepared_name(path.name)
+        if link.get("prepared") and prepared.is_file():
+            sources.append(Source(path.name, account, read_import_file(prepared.name, prepared.read_bytes()),
+                                  prepared=True))
+            continue
+        f = read_import_file(path.name, path.read_bytes())
+        suggestions = {}
+        if account in book.accounts:
+            suggestions = {r["index"]: r["suggested"] for r in preview(book, history, f, account)
+                           if r["suggested"] and not r["skip"]}
+        sources.append(Source(path.name, account, f, suggestions=suggestions))
+    return sources, not_linked
+
+
 def save_prepared(original_path: Path, data: bytes) -> Path:
     target = original_path.parent.parent / "prepared" / prepared_name(original_path.name)
     if target.resolve() == original_path.resolve():

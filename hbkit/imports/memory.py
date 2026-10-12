@@ -84,6 +84,12 @@ class ImportMemory:
         self.links.append(record)
         return record
 
+    def mark_imported(self, month: str, file: str, **info) -> None:
+        """Note on a file's link that it was imported into HomeBank (when, how many, into which file)."""
+        record = self.get(month, file)
+        if record is not None:
+            record["imported"] = {"when": datetime.now().isoformat(timespec="seconds"), **info}
+
     def unlink(self, month: str, file: str) -> None:
         self.links = [x for x in self.links if not (x.get("month") == month and x.get("file") == file)]
 

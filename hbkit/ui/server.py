@@ -35,6 +35,7 @@ import subprocess
 import sys
 import threading
 import traceback
+from collections import Counter
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -43,7 +44,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .. import __version__
 from ..errors import HbkitError
-from ..privacy import DATA_DIR, OUT_DIR, write_error_log
+from ..privacy import DATA_DIR, OUT_DIR, backup_dir, write_error_log
 
 STATIC = Path(__file__).parent / "static"
 #: The toolkit's own files, watched for updates made while the server runs.
@@ -55,6 +56,8 @@ CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; c
                  ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml"}
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
        "img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+#: The interface's own settings, in the data folder (so they are kept between starts).
+SETTINGS_NAME = "ui-settings.json"
 
 
 class ApiError(Exception):
@@ -78,10 +81,33 @@ class UiState:
         self._book_stamp = None
         self._matches = None  # (key, RuleMatches, sha256 of the file) for the rule review page
         self._history = None  # (stamp, imports History) for the imports page
+        #: change the selected file itself (after a backup) instead of writing new copies
+        self.in_place = bool(self._settings().get("change_file_itself", False))
         if self.input_path is None:
             files = self.data_files()
             if len(files) == 1:
                 self.input_path = files[0]
+
+    def _settings(self) -> dict:
+        try:
+            data = json.loads((self.data_dir / SETTINGS_NAME).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def set_in_place(self, value: bool) -> None:
+        settings = self._settings()
+        settings.update({"version": 1, "change_file_itself": bool(value)})
+        path = self.data_dir / SETTINGS_NAME
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(settings, indent=1), encoding="utf-8")
+        os.replace(tmp, path)
+        self.in_place = bool(value)
+
+    def save_target(self, default_output) -> tuple[Path | None, Path]:
+        """(new copy path, or None for the selected file itself; backup folder)."""
+        return (None if self.in_place else default_output(self.out_root)), backup_dir(self.out_root)
 
     def data_files(self) -> list[Path]:
         if not self.data_dir.is_dir():
@@ -152,7 +178,18 @@ def api_status(state: UiState, q: dict, body: Any) -> dict:
         "out_root": str(state.out_root),
         "data_files": [_file_info(p) for p in state.data_files()],
         "selected": _file_info(state.input_path) if state.input_path and state.input_path.is_file() else None,
+        "in_place": state.in_place,
+        "backups": str(backup_dir(state.out_root)),
     }
+
+
+def api_save_mode(state: UiState, q: dict, body: Any) -> dict:
+    value = body.get("in_place")
+    if not isinstance(value, bool):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "in_place must be true or false")
+    with state.lock:
+        state.set_in_place(value)
+    return api_status(state, q, body)
 
 
 def api_select(state: UiState, q: dict, body: Any) -> dict:
@@ -359,7 +396,8 @@ def api_review_apply(state: UiState, q: dict, body: Any) -> dict:
     with state.lock:
         path, rows = _review_with_edits(state, body)
         book = state.book()
-        summary, output = apply_review_rows(rows, book, state.input_path, default_output(state.out_root), path.parent)
+        output, backups = state.save_target(default_output)
+        summary, output = apply_review_rows(rows, book, state.input_path, output, path.parent, backups)
     return {"summary": summary.to_dict(), "output": str(output) if output else None}
 
 
@@ -612,6 +650,95 @@ def api_import_prepare(state: UiState, q: dict, body: Any) -> dict:
             "transactions": len(f.txns), "account_name": book.account_name(key)}
 
 
+# --- importing into the HomeBank file --------------------------------------------------------------
+
+
+def _bulk_options(values: dict) -> dict:
+    from ..imports.bulk import MAX_DAYS
+
+    def flag(name: str, default: bool) -> bool:
+        v = values.get(name, default)
+        return v if isinstance(v, bool) else str(v).lower() in ("1", "true", "yes", "on")
+
+    try:
+        days = int(values.get("days") or 0)
+    except (TypeError, ValueError):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "the date tolerance must be a whole number") from None
+    if not 0 <= days <= MAX_DAYS:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"the date tolerance must be 0 to {MAX_DAYS} days")
+    return {"days": days, "run_rules": flag("rules", True), "payee_defaults": flag("payee_defaults", False)}
+
+
+def _bulk_plan(state: UiState, month: str, options: dict):
+    from ..imports import session as S
+    from ..imports.bulk import plan_import
+
+    book, history = state.import_history()
+    memory = state.import_memory()
+    sources, not_linked = S.month_sources(book, history, memory, state.out_root, month)
+    return book, memory, plan_import(book, sources, **options), not_linked
+
+
+def api_import_bulk(state: UiState, q: dict, body: Any) -> dict:
+    """What importing the month's linked files would add to the HomeBank file."""
+    from ..imports.memory import check_month
+
+    month = check_month(q.get("month", ""))
+    options = _bulk_options(q)
+    with state.lock:
+        book, memory, plan, not_linked = _bulk_plan(state, month, options)
+
+    def cat(key: int) -> str:
+        return (book.category_path(key) or "") if key else ""
+
+    files = []
+    for i, src in enumerate(plan.sources):
+        mine = [c for c in plan.candidates if c.source == i]
+        link = memory.get(month, src.name) or {}
+        files.append({"name": src.name, "account": src.account, "account_name": book.account_name(src.account) or "",
+                      "prepared": src.prepared, "transactions": len(mine),
+                      "counts": dict(Counter(c.status for c in mine)), "imported": link.get("imported")})
+    return {
+        "month": month, "sha256": plan.source_sha256, **options, "files": files, "not_linked": not_linked,
+        "new_payees": plan.new_payees, "counts": dict(plan.counts()),
+        "candidates": [{
+            "id": c.id, "file": plan.sources[c.source].name, "account_name": book.account_name(c.account) or "",
+            "date": c.date.isoformat() if c.date else "", "amount": c.txn.amount, "memo": c.txn.memo,
+            "payee": (book.payee_name(c.payee_key) or "") if c.payee_key else c.payee_name,
+            "new_payee": bool(c.payee_name and not c.payee_key), "category": cat(c.category_key),
+            "category_from": c.category_from, "paymode": c.paymode, "status": c.status, "notes": c.notes,
+            "match": {"date": c.match.date.isoformat() if c.match.date else "", "memo": c.match.memo,
+                      "amount": c.match.amount} if c.match is not None else None,
+        } for c in plan.candidates],
+    }
+
+
+def api_import_bulk_apply(state: UiState, q: dict, body: Any) -> dict:
+    from ..imports.bulk import IMPORTABLE, default_output, import_transactions
+    from ..imports.memory import check_month
+
+    month = check_month(str(body.get("month", "")))
+    options = _bulk_options(body)
+    chosen = body.get("chosen")
+    if not isinstance(chosen, list) or not all(isinstance(x, str) for x in chosen):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "chosen must be a list of transaction ids")
+    with state.lock:
+        book, memory, plan, _ = _bulk_plan(state, month, options)
+        output, backups = state.save_target(default_output)
+        summary, path = import_transactions(book, plan, set(chosen), state.input_path, output,
+                                            str(body.get("sha256") or "") or None, backups)
+        if path is not None:
+            wanted = set(chosen)
+            picked = Counter(c.source for c in plan.candidates if c.id in wanted and c.status in IMPORTABLE)
+            for i, src in enumerate(plan.sources):
+                if picked.get(i):
+                    memory.mark_imported(month, src.name, transactions=picked[i], into=path.name,
+                                         in_place=path == state.input_path)
+            memory.save()
+    return {"summary": summary.to_dict(), "output": str(path) if path else None,
+            "in_place": bool(path is not None and path == state.input_path)}
+
+
 # --- transfers -------------------------------------------------------------------------------------
 
 
@@ -661,8 +788,9 @@ def api_transfers_link(state: UiState, q: dict, body: Any) -> dict:
         raise ApiError(HTTPStatus.BAD_REQUEST, "invalid transaction number") from None
     with state.lock:
         book = state.book()
-        summary, output = link_transfers(book, pairs, _days(body.get("days")), state.input_path,
-                                         default_output(state.out_root), str(body.get("sha256") or "") or None)
+        output, backups = state.save_target(default_output)
+        summary, output = link_transfers(book, pairs, _days(body.get("days")), state.input_path, output,
+                                         str(body.get("sha256") or "") or None, backups)
     return {"summary": summary.to_dict(), "output": str(output) if output else None}
 
 
@@ -705,14 +833,24 @@ def api_fill_apply(state: UiState, q: dict, body: Any) -> dict:
         raise ApiError(HTTPStatus.BAD_REQUEST, "rules must be a list of rule ids")
     with state.lock:
         book = state.book()
-        summary, output = fill_categories(book, rules, state.input_path, default_output(state.out_root),
-                                          str(body.get("sha256") or "") or None)
+        output, backups = state.save_target(default_output)
+        summary, output = fill_categories(book, rules, state.input_path, output,
+                                          str(body.get("sha256") or "") or None, backups)
     return {"summary": summary.to_dict(), "output": str(output) if output else None}
 
 
 def api_open(state: UiState, q: dict, body: Any) -> dict:
     """Show a results folder in Windows Explorer, or open a report page in the browser."""
-    target = state.inside_out(str(body.get("path", "")))
+    given = str(body.get("path", ""))
+    if given and state.input_path is not None and not body.get("file"):
+        try:
+            same = Path(given).resolve() == state.input_path
+        except (OSError, ValueError):
+            same = False
+        if same:  # the selected HomeBank file (after the toolkit changed it): show its folder
+            open_in_file_manager(state.input_path.parent)
+            return {"opened": str(state.input_path.parent)}
+    target = state.inside_out(given)
     if body.get("file"):
         if not target.is_file() or target.suffix.lower() not in (".html", ".csv"):
             raise ApiError(HTTPStatus.NOT_FOUND, "that report does not exist")
@@ -729,6 +867,7 @@ def api_open(state: UiState, q: dict, body: Any) -> dict:
 ROUTES = {
     ("GET", "/api/status"): api_status,
     ("POST", "/api/select"): api_select,
+    ("POST", "/api/save-mode"): api_save_mode,
     ("GET", "/api/structure"): api_structure,
     ("GET", "/api/analyses"): api_analyses,
     ("POST", "/api/run"): api_run,
@@ -749,6 +888,8 @@ ROUTES = {
     ("POST", "/api/import/remove"): api_import_remove,
     ("GET", "/api/import/preview"): api_import_preview,
     ("POST", "/api/import/prepare"): api_import_prepare,
+    ("GET", "/api/import/bulk"): api_import_bulk,
+    ("POST", "/api/import/bulk/apply"): api_import_bulk_apply,
     ("GET", "/api/transfers"): api_transfers,
     ("POST", "/api/transfers/link"): api_transfers_link,
     ("GET", "/api/fill"): api_fill,

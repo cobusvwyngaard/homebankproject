@@ -125,6 +125,9 @@ info tags kxfer scat samt smem`
 * `flags`: 2 income, 8 internal transfer, 16 transfer between currencies (then `damt`
   is the other side's amount), 32 remind, 64 second cheque book, 256 split,
   512 imported, 1024 past.
+* Order: HomeBank prepends each `<ope>` to its account while loading and then sorts
+  every account's transactions by date, so the order of `<ope>` elements in the file
+  does not matter. It saves them account by account.
 * Internal transfers: two `<ope>` elements with the same `kxfer`, each pointing at the
   other account with `dst_account`. Before 5.x, payment mode 5 marked them instead.
   Linking two existing transactions (`transaction_xfer_change_to_child` in

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from . import __version__
 from .errors import HbkitError
-from .privacy import DATA_DIR, OUT_DIR, Summary, Terminal, default_input, display_path, write_error_log
+from .privacy import DATA_DIR, OUT_DIR, Summary, Terminal, default_input, display_path, save_target, write_error_log
 
 
 SAMPLE_SETTINGS = """# Settings for the synthetic sample file (made by generate-sample --reporting).
@@ -174,6 +174,51 @@ def cmd_prepare_import(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_import_files(args: argparse.Namespace) -> int:
+    from .analyses.base import write_csv
+    from .imports import session as S
+    from .imports.bulk import IMPORTABLE, default_output, import_transactions, plan_import
+    from .imports.memory import MEMORY_NAME, ImportMemory, check_month
+    from .imports.predict import History
+    from .privacy import new_run_dir
+    from .xhb.reader import read_file
+
+    month = check_month(args.month)
+    input_path = _input_path(args)
+    book = read_file(input_path)
+    term = Terminal(book.sensitive_strings())
+    memory = ImportMemory(Path(args.data) / MEMORY_NAME)
+    sources, not_linked = S.month_sources(book, History(book), memory, Path(args.out), month)
+    if not sources:
+        raise HbkitError("no files of that month are linked to an account (add them with prepare-import "
+                         "or on the Imports page)")
+    plan = plan_import(book, sources, days=args.days, run_rules=not args.no_rules,
+                       payee_defaults=args.payee_defaults)
+    folder = new_run_dir(Path(args.out), "import-files")
+    write_csv(folder / "transactions.csv",
+              ["file", "account", "date", "amount", "memo", "payee", "category", "status", "imported", "notes"],
+              ([plan.sources[c.source].name, book.account_name(c.account), c.date, c.txn.amount, c.txn.memo,
+                (book.payee_name(c.payee_key) or "") if c.payee_key else c.payee_name,
+                book.category_path(c.category_key) or "", c.status, "yes" if c.status == "new" else "no",
+                "; ".join(c.notes)] for c in plan.candidates))
+    output, backups = save_target(Path(args.out), args.output, args.in_place, default_output)
+    summary, path = import_transactions(book, plan, None, input_path, output, plan.source_sha256, backups)
+    if path is not None:
+        for i, src in enumerate(plan.sources):
+            n = sum(1 for c in plan.candidates if c.source == i and c.status == "new")
+            if n:
+                memory.mark_imported(month, src.name, transactions=n, into=path.name, in_place=output is None)
+        memory.save()
+    if not_linked:
+        summary.count("Files not linked to an account (left out)", len(not_linked))
+    summary.output("List of every transaction and what happened to it", folder / "transactions.csv")
+    if any(c.status in IMPORTABLE and c.status != "new" for c in plan.candidates):
+        summary.note("Transactions that look like ones already in HomeBank were left out; to import some of", terminal_only=True)
+        summary.note("them anyway, use the Imports page of the browser interface (python -m hbkit ui).", terminal_only=True)
+    term.summary(summary)
+    return 0
+
+
 TRANSFER_HEADER = [
     "approve", "kind", "group", "out_index", "out_date", "out_account", "out_amount", "out_memo",
     "in_index", "in_date", "in_account", "in_amount", "in_memo", "days_apart", "signs",
@@ -207,9 +252,9 @@ def cmd_link_transfers(args: argparse.Namespace) -> int:
             pairs = [(int(r["out_index"]), int(r["in_index"])) for r in approved]
         except ValueError:
             raise HbkitError("out_index and in_index must be whole numbers") from None
-        summary, _ = link_transfers(book, pairs, int(meta.get("days", args.days)), input_path,
-                                    Path(args.output) if args.output else default_output(Path(args.out)),
-                                    meta.get("source_sha256"))
+        output, backups = save_target(Path(args.out), args.output, args.in_place, default_output)
+        summary, _ = link_transfers(book, pairs, int(meta.get("days", args.days)), input_path, output,
+                                    meta.get("source_sha256"), backups)
         term.summary(summary)
         return 0
 
@@ -268,9 +313,8 @@ def cmd_fill_categories(args: argparse.Namespace) -> int:
         meta_path = review.parent / "summary.json"
         meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {}
         chosen = [r["rule_id"] for r in rows if r.get("approve", "").strip().lower() in APPROVED]
-        summary, _ = fill_categories(book, chosen, input_path,
-                                     Path(args.output) if args.output else default_output(Path(args.out)),
-                                     meta.get("source_sha256"))
+        output, backups = save_target(Path(args.out), args.output, args.in_place, default_output)
+        summary, _ = fill_categories(book, chosen, input_path, output, meta.get("source_sha256"), backups)
         term.summary(summary)
         return 0
 
@@ -535,6 +579,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--data", metavar="FOLDER", default=str(DATA_DIR), help=argparse.SUPPRESS)
     p.set_defaults(handler=cmd_prepare_import)
 
+    p = sub.add_parser("import-files",
+                       help="import a month's bank files (linked to their accounts) into your HomeBank file in one go")
+    _add_file_option(p)
+    _add_out_option(p)
+    p.add_argument("--month", required=True, metavar="YYYY-MM", help="the month whose files to import")
+    p.add_argument("--days", type=int, default=0,
+                   help="treat a transaction as already in HomeBank when the account has one with the same amount "
+                        "at most this many days apart (default 0, HomeBank's default)")
+    p.add_argument("--no-rules", action="store_true", help="do not run your assignment rules on the new transactions")
+    p.add_argument("--payee-defaults", action="store_true",
+                   help="fill empty categories and payment modes from the payee's defaults (HomeBank's option)")
+    p.add_argument("--output", metavar="PATH", help="name of the new copy (default: data/out/with-imports_<date>.xhb)")
+    p.add_argument("--in-place", action="store_true",
+                   help="change the HomeBank file itself instead of writing a new copy (a backup is kept in "
+                        "data/out/backups; HomeBank must be closed)")
+    p.add_argument("--data", metavar="FOLDER", default=str(DATA_DIR), help=argparse.SUPPRESS)
+    p.set_defaults(handler=cmd_import_files)
+
     p = sub.add_parser("fill-categories",
                        help="fill empty categories with the rules you choose, in a NEW copy of your HomeBank file")
     _add_file_option(p)
@@ -542,6 +604,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--review", metavar="PATH",
                    help="apply the rules approved in rules.csv (or the folder that contains it)")
     p.add_argument("--output", metavar="PATH", help="name of the new copy (default: data/out/with-categories_<date>.xhb)")
+    p.add_argument("--in-place", action="store_true",
+                   help="change the HomeBank file itself instead of writing a new copy (a backup is kept in data/out/backups; HomeBank must be closed)")
     p.set_defaults(handler=cmd_fill_categories)
 
     p = sub.add_parser("link-transfers",
@@ -553,6 +617,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--review", metavar="PATH",
                    help="link the pairs approved in transfers.csv (or the folder that contains it)")
     p.add_argument("--output", metavar="PATH", help="name of the new copy (default: data/out/with-transfers_<date>.xhb)")
+    p.add_argument("--in-place", action="store_true",
+                   help="change the HomeBank file itself instead of writing a new copy (a backup is kept in data/out/backups; HomeBank must be closed)")
     p.set_defaults(handler=cmd_link_transfers)
 
     p = sub.add_parser("generate-sample", help="write a synthetic HomeBank file to try the toolkit on")

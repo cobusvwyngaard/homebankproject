@@ -20,7 +20,7 @@ from typing import Any
 
 from .. import __version__
 from ..errors import HbkitError
-from ..privacy import OUT_DIR, Summary, default_input, timestamp
+from ..privacy import OUT_DIR, Summary, default_input, save_target, timestamp
 from ..rules.engine import Matcher, SimRule, existing_rules, simulate
 from ..rules.mining import (
     NEW_RULE_FLAGS, SCENARIOS, AccountDependence, Candidate, Item, MiningParams, Outcome, backtest,
@@ -29,7 +29,7 @@ from ..rules.mining import (
 from ..xhb import format as F
 from ..xhb.model import Book, Rule
 from ..xhb.reader import read_file
-from ..xhb.writer import XhbEditor
+from ..xhb.writer import XhbEditor, describe_save
 from .base import Analysis, Command, Context, Param, pct, write_csv, write_json
 
 FIELDS = {"memo": F.RULE_FIELD_MEMO, "payee": F.RULE_FIELD_PAYEE}
@@ -447,6 +447,8 @@ def _apply_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--out", metavar="FOLDER", default=str(OUT_DIR),
                    help="folder for the new copy (default: data/out)")
     p.add_argument("--output", metavar="PATH", help="name of the new copy (default: data/out/with-rules_<date>.xhb)")
+    p.add_argument("--in-place", action="store_true",
+                   help="change the HomeBank file itself instead of writing a new copy (a backup is kept in data/out/backups; HomeBank must be closed)")
 
 
 def read_review(path: Path, required: tuple[str, ...] = ("approve", "rule_text", "category")) -> list[dict[str, str]]:
@@ -481,9 +483,10 @@ def default_output(out_root: Path) -> Path:
     return output
 
 
-def apply_review_rows(rows: list[dict[str, str]], book: Book, input_path: Path, output: Path,
-                      review_folder: Path | None = None) -> tuple[Summary, Path | None]:
-    """Add the approved rows as rules to a new copy of the file. Used by the command and the browser."""
+def apply_review_rows(rows: list[dict[str, str]], book: Book, input_path: Path, output: Path | None,
+                      review_folder: Path | None = None, backup_dir: Path | None = None) -> tuple[Summary, Path | None]:
+    """Add the approved rows as rules to a new copy at `output`, or (output None) to the file
+    itself after a backup in `backup_dir`. Used by the command and the browser."""
     editor = XhbEditor(book)
     existing = {(r.match_field, r.search.casefold()) for r in book.rules}
     skipped: Counter = Counter()
@@ -523,9 +526,8 @@ def apply_review_rows(rows: list[dict[str, str]], book: Book, input_path: Path, 
     # general ones (as in evaluation_order).
     for _, rule in sorted(chosen, key=lambda ar: (not ar[0], -len(ar[1].search))):
         editor.add_rule(rule)
-    result = editor.save(output, input_path=input_path)
+    result = editor.save_to(output, input_path, backup_dir)
     s.count("Rules added", result.inserted)
-    s.output("New copy", result.path)
 
     meta = review_folder / "summary.json" if review_folder else None
     if meta is not None and meta.is_file():
@@ -536,8 +538,7 @@ def apply_review_rows(rows: list[dict[str, str]], book: Book, input_path: Path, 
         if source and source != hashlib.sha256(book.raw).hexdigest():
             s.note("Note: the HomeBank file has changed since this review was made;")
             s.note("categories were matched by name, so check the new rules in HomeBank.")
-    s.note("Your original file was not changed. Open the new copy in HomeBank, check the")
-    s.note("rules under Manage > Assignments, and use the copy once you are happy with it.")
+    describe_save(s, result, "the rules under Manage > Assignments")
     return s, result.path
 
 
@@ -550,8 +551,8 @@ def apply_rules(args: argparse.Namespace) -> tuple[Summary, Book]:
     rows = read_review(review)
     input_path = Path(args.file) if args.file else default_input()
     book = read_file(input_path)
-    output = Path(args.output) if args.output else default_output(Path(args.out))
-    summary, _ = apply_review_rows(rows, book, input_path, output, review.parent)
+    output, backups = save_target(Path(args.out), args.output, getattr(args, "in_place", False), default_output)
+    summary, _ = apply_review_rows(rows, book, input_path, output, review.parent, backups)
     return summary, book
 
 

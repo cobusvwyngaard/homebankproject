@@ -507,6 +507,92 @@ class FillPageTests(ServerTestCase):
         self.assertIsNone(self.api("/api/fill/apply", {"rules": []})["output"])
 
 
+class SaveModeTests(ServerTestCase):
+    def setUp(self):
+        super().setUp()
+        self.src.write_bytes(sample(uncategorised=0.3).data)
+
+    def test_change_the_file_itself(self):
+        from unittest import mock
+
+        from hbkit.xhb import writer
+
+        self.assertFalse(self.api("/api/status")["in_place"])
+        self.assertEqual(self.request("POST", "/api/save-mode", {"in_place": "yes"})[0], 400)
+        status = self.api("/api/save-mode", {"in_place": True})
+        self.assertTrue(status["in_place"])
+        self.assertTrue(ui.UiState(out_root=self.out, data_dir=self.data).in_place)  # remembered
+        self.assertEqual(json.loads((self.data / "ui-settings.json").read_text())["change_file_itself"], True)
+
+        before = self.src.read_bytes()
+        info = self.api("/api/fill")
+        with mock.patch.object(writer, "homebank_running", return_value=True):
+            status_code, res, _ = self.request("POST", "/api/fill/apply", {"rules": ["E4"], "sha256": info["sha256"]})
+        self.assertEqual(status_code, 400)
+        self.assertIn("HomeBank is running", res["error"])
+        self.assertEqual(self.src.read_bytes(), before)
+
+        res = self.api("/api/fill/apply", {"rules": ["E4"], "sha256": info["sha256"]})
+        self.assertEqual(Path(res["output"]), self.src.resolve())
+        self.assertNotEqual(self.src.read_bytes(), before)
+        (backup,) = (self.out / "backups").iterdir()
+        self.assertEqual(backup.read_bytes(), before)
+        self.assertEqual(list(self.out.glob("*.xhb")), [])
+        self.assertEqual(self.api("/api/structure")["facts"]["transactions"], len(read_bytes(before).transactions))
+        self.assertEqual(self.api("/api/fill")["sha256"] == info["sha256"], False)  # the page now shows the result
+
+        self.api("/api/open", {"path": str(self.src)})  # "Show in folder" for the changed file
+        self.assertEqual(self.opened[-1], self.src.resolve().parent)
+        self.assertEqual(self.request("POST", "/api/open", {"path": str(self.src), "file": True})[0], 403)
+
+        self.api("/api/save-mode", {"in_place": False})
+        res = self.api("/api/fill/apply", {"rules": ["E1"], "sha256": self.api("/api/fill")["sha256"]})
+        self.assertEqual(Path(res["output"]).parent, self.out.resolve())
+
+
+class BulkImportPageTests(ServerTestCase):
+    def test_check_and_import_a_month(self):
+        import base64
+
+        from hbkit.fixtures.generator import ACC_CHEQUE
+        from hbkit.imports.memory import ImportMemory
+
+        from .test_import_prepare import CHEQUE
+
+        self.api("/api/import/upload", {"month": "2025-10", "name": "transact.csv",
+                                        "content": base64.b64encode(CHEQUE.encode()).decode()})
+        self.api("/api/import/upload", {"month": "2025-10", "name": "later.csv",
+                                        "content": base64.b64encode(CHEQUE.encode()).decode()})
+        self.api("/api/import/link", {"month": "2025-10", "file": "transact.csv", "account": ACC_CHEQUE})
+        res = self.api("/api/import/bulk?month=2025-10&days=0&rules=true&payee_defaults=false")
+        self.assertEqual(res["not_linked"], ["later.csv"])
+        self.assertEqual([f["name"] for f in res["files"]], ["transact.csv"])
+        self.assertEqual(res["counts"], {"new": 5})
+        self.assertFalse(res["files"][0]["prepared"])
+        self.assertTrue(any(c["category"] for c in res["candidates"]))  # suggestions for a file not prepared
+        self.assertEqual(self.request("GET", "/api/import/bulk?month=2025-10&days=99")[0], 400)
+
+        before = self.src.read_bytes()
+        chosen = [c["id"] for c in res["candidates"]][:4]
+        out = self.api("/api/import/bulk/apply", {"month": "2025-10", "days": 0, "rules": True, "payee_defaults": False,
+                                                  "chosen": chosen, "sha256": res["sha256"]})
+        self.assertFalse(out["in_place"])
+        self.assertEqual(self.src.read_bytes(), before)
+        new = read_bytes(Path(out["output"]).read_bytes())
+        self.assertEqual(len(new.transactions), len(read_bytes(before).transactions) + 4)
+        record = ImportMemory(self.data / "import-accounts.json").get("2025-10", "transact.csv")
+        self.assertEqual(record["imported"]["transactions"], 4)
+
+        self.api("/api/save-mode", {"in_place": True})
+        res = self.api("/api/import/bulk?month=2025-10")
+        out = self.api("/api/import/bulk/apply", {"month": "2025-10", "chosen": [c["id"] for c in res["candidates"]],
+                                                  "sha256": res["sha256"]})
+        self.assertTrue(out["in_place"])
+        self.assertEqual(len(read_bytes(self.src.read_bytes()).transactions), len(read_bytes(before).transactions) + 5)
+        self.assertEqual(self.api("/api/import/bulk?month=2025-10")["counts"], {"in HomeBank": 5})
+        self.assertEqual(self.request("POST", "/api/import/bulk/apply", {"month": "2025-10", "chosen": "all"})[0], 400)
+
+
 class PdfStatementImportTests(ServerTestCase):
     def test_upload_and_prepare_a_pdf_statement(self):
         import base64

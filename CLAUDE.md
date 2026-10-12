@@ -62,7 +62,12 @@ Practical consequence: never put the literal text `data/` in a shell command
   install, so the wheels are committed in `vendor/wheels/` (see vendor/README.md) and
   pinned in `requirements.txt`. Report tests are skipped when Plotly is not installed.
 - Plan first, show the owner, then build in stages with all tests passing at each stage.
-- The writer never overwrites its input; it refuses if the output path is the input.
+- By default the writer writes a new copy and refuses if the output path is the input.
+  **Owner-approved exception:** the "Change this file itself" option (File page,
+  `--in-place`) changes the selected file, and only via `XhbEditor.save_in_place`: the
+  file on disk must still equal what was read, HomeBank must not be running, a backup goes
+  to `data/out/backups/` first, and the file is replaced atomically and read back. Every
+  step that writes the HomeBank file must offer both ways (`save_to`, `describe_save`).
 - Adding an analysis later should mean one new module in `hbkit/analyses/` plus its tests.
 
 ## Commands for development
@@ -103,7 +108,8 @@ hbkit/imports/               preparing bank files for import: formats.py (QIF, H
                              guess), memory.py (file name -> account record), session.py (month folders),
                              transfers.py (find unlinked transfer pairs, link them in a new copy),
                              pdf.py (PDF text with positions, stdlib only), statement.py (a PDF
-                             statement's transaction table -> transactions, balance-chain check)
+                             statement's transaction table -> transactions, balance-chain check),
+                             bulk.py (import linked files into the HomeBank file, HomeBank's way)
 hbkit/ui/server.py           browser interface: stdlib HTTP server on 127.0.0.1, JSON API, security checks
 hbkit/ui/static/             the page (index.html, app.js, style.css); no external resources
 hbkit/fixtures/generator.py  synthetic .xhb files for tests and trying things out
@@ -144,7 +150,13 @@ account; record of file names and accounts in the data folder's
 import code plus the owner's description of their two banks' layouts — never put real
 statement lines in tests or docs, nor any value (amount, date, reference, number) copied
 from a file the owner uploaded, not even as an example; check new fixtures against the
-upload before committing), transfer linking after import (Transfers page and
+upload before committing), importing a month's linked files into the HomeBank file in one
+go (Imports page "Import into HomeBank" and `import-files`; as HomeBank's import: payees
+by name and added when new, categories never created, rules on and payee defaults off by
+default, duplicates against the account (one-to-one, HomeBank's date tolerance) and
+across files left out unless ticked), the option to change the selected file itself
+instead of writing copies (File page, `--in-place`; remembered in the data folder's
+`ui-settings.json`), transfer linking after import (Transfers page and
 `link-transfers`; owner decisions: 4 days apart by default, pairs start unticked with a
 select-all, transactions without another side are only listed, never created), filling
 empty categories with chosen rules (Fill categories page and `fill-categories`; only empty

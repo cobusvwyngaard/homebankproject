@@ -77,6 +77,19 @@ async function openFolder(path) {
   try { await api('/api/open', { path }); } catch (err) { toast(err.message, true); }
 }
 
+// Where changes to the HomeBank file go: a new copy (default) or the file itself (File page option).
+function inPlace() { return !!(app.status && app.status.in_place); }
+function confirmWrite(what) {
+  return confirm(inPlace()
+    ? `${what} in your HomeBank file itself?\n\nA backup of the file as it is now is kept first. Close HomeBank before you continue.`
+    : `${what} in a NEW copy of your HomeBank file?\nYour original file will not be changed.`);
+}
+function saveModeNote() {
+  return h('p', { class: 'small muted save-mode' }, inPlace()
+    ? ['Changes go into ', h('b', { text: 'your HomeBank file itself' }), ' (a backup is kept first; close HomeBank). Change this on the File page.']
+    : ['Changes go into ', h('b', { text: 'a new copy' }), ' of your HomeBank file. Change this on the File page.']);
+}
+
 function confirmLeave() {
   return !app.dirty || confirm('You have unsaved approvals on the rule review page. Leave without saving?');
 }
@@ -213,7 +226,9 @@ async function viewFile() {
 
   const parts = [
     h('h1', { text: 'Your HomeBank file' }),
-    h('p', { class: 'lead', text: 'The toolkit only reads this file. Changes are always written to a new copy in the output folder.' }),
+    h('p', { class: 'lead', text: inPlace()
+      ? 'The toolkit reads this file, and changes it itself when you apply rules, fill categories, link transfers or import (see below).'
+      : 'The toolkit only reads this file. Changes are written to a new copy in the output folder (see below).' }),
     h('div', { class: 'card' },
       h('h2', { text: 'Choose the file' }),
       status.data_files.length ? picks : h('p', { class: 'muted', text: 'No .xhb file in the data folder yet.' }),
@@ -239,8 +254,36 @@ async function viewFile() {
         h('details', {}, h('summary', { text: 'Structure report (the same as .\\hb structure)' }),
           h('pre', { class: 'report', text: info.report.join('\n') }))));
     }
+    parts.push(saveModeCard(status));
   }
   main(parts);
+}
+
+function saveModeCard(status) {
+  const choice = (value, title, text) => h('label', { class: 'choice' },
+    h('input', { type: 'radio', name: 'save-mode', checked: status.in_place === value, onchange: () => setMode(value) }),
+    h('span', {}, h('b', { text: title }), h('br'), h('span', { class: 'small muted', text })));
+  async function setMode(value) {
+    try {
+      app.status = await api('/api/save-mode', { in_place: value });
+      toast(value ? 'From now on the toolkit changes this file itself.' : 'From now on the toolkit writes new copies.');
+      await viewFile();
+    } catch (err) { toast(err.message, true); }
+  }
+  return h('div', { class: 'card' },
+    h('h2', { text: 'When the toolkit changes your file' }),
+    h('p', { class: 'small muted', text: 'Used by Rule review (adding rules), Fill categories, Transfers and Imports. Remembered for next time.' }),
+    choice(false, 'Write a new copy in the output folder (safest)',
+      'Your file is never touched. Open the copy in HomeBank, check it, and use it as your file once you are happy.'),
+    choice(true, 'Change this file itself',
+      'Each change is written straight into the file above, so the next step works on the result. Before every change ' +
+      'a copy of the file as it was is kept in the backups folder. HomeBank must be closed: the toolkit refuses while it runs, ' +
+      'because HomeBank would write its own version over the change when it saves.'),
+    status.in_place ? h('p', { class: 'small' }, 'Backups: ', h('code', { text: status.backups }), ' ',
+      h('button', { type: 'button', class: 'compact', onclick: () => openFolder(status.backups) }, 'Show in folder')) : null,
+    status.in_place && status.selected.path.toLowerCase().startsWith(status.data_dir.toLowerCase())
+      ? h('p', { class: 'small warn-text', text: 'This is the copy in the data folder, not the file HomeBank opens. Either open this copy in ' +
+        'HomeBank afterwards, or choose your HomeBank file in its own place above (paste its full path).' }) : null);
 }
 
 // --- 2. analyse --------------------------------------------------------------------------------------------
@@ -498,13 +541,13 @@ async function suggestedRules(run) {
     app.dirty = false; updateCounter();
     toast(`Saved: ${res.approved} rule(s) approved.`);
   }));
-  const apply = h('button', { type: 'button', class: 'primary' }, 'Add approved rules to a new copy…');
+  const apply = h('button', { type: 'button', class: 'primary' }, inPlace() ? 'Add approved rules to the file…' : 'Add approved rules to a new copy…');
   apply.addEventListener('click', () => {
     const n = rules.filter(r => r.approve).length;
     if (!n) { toast('Tick at least one rule first.', true); return; }
     const bad = rules.filter(r => r.approve && !catSet.has(r.category.trim().toLowerCase())).length;
     const extra = bad ? `\n\n${bad} approved rule(s) have a category that does not exist and will be skipped.` : '';
-    if (!confirm(`Write ${n} approved rule(s) to a NEW copy of your HomeBank file?\nYour original file will not be changed.${extra}`)) return;
+    if (!confirmWrite(`Add ${n} approved rule(s)${extra ? ' (' + extra.trim() + ')' : ''}`)) return;
     busy(apply, 'Writing', async () => {
       const res = await api('/api/review/apply', { run, edits: edits() });
       app.dirty = false; updateCounter();
@@ -536,6 +579,7 @@ async function suggestedRules(run) {
       h('button', { type: 'button', onclick: () => setShown(true) }, 'Approve all shown'),
       h('button', { type: 'button', onclick: () => setShown(false) }, 'Clear all shown'),
       counter, h('span', { class: 'spacer' }), download, save, apply),
+    saveModeNote(),
     h('div', { class: 'table-wrap' }, tbl),
     result, dialog);
 }
@@ -839,15 +883,138 @@ async function viewImports() {
 
   const record = info.record.length ? [h('h2', { text: 'Import record' }), h('div', { class: 'card' },
     h('p', { class: 'small muted', text: 'Which file went to which account, every month. File names seen before are linked to the same account next time.' }),
-    dataTable(['month', 'file', 'account', 'transactions', 'categories_written', 'prepared', 'linked_on'],
+    dataTable(['month', 'file', 'account', 'transactions', 'categories_written', 'prepared', 'linked_on', 'imported_into_HomeBank'],
       info.record.map(x => [x.month, x.file, x.account_name || '', x.transactions ?? '', x.categorised ?? '',
-        x.prepared ? 'yes' : 'no', String(x.linked || '').replace('T', ' ')]), { pageSize: 50 }))] : [];
+        x.prepared ? 'yes' : 'no', String(x.linked || '').replace('T', ' '),
+        x.imported ? `${x.imported.transactions} on ${String(x.imported.when).replace('T', ' ')}` : '']), { pageSize: 50 }))] : [];
 
   main(h('h1', { text: 'Prepare imports' }),
     h('p', { class: 'lead', text: 'Add the files you downloaded from your banks for a month. Each file is linked to its account, and categories ' +
-      'are filled in from that account\'s own history, which HomeBank\'s rules cannot do. The prepared copy is what you import in HomeBank. ' +
-      'Your downloads are never changed.' }),
-    monthRow, accountsCard, filesCard, previewArea, record);
+      'are filled in from that account\'s own history, which HomeBank\'s rules cannot do. Then import them all at once below, or ' +
+      'import each prepared copy in HomeBank. Your downloads are never changed.' }),
+    monthRow, accountsCard, filesCard, previewArea, info.files.length ? bulkImportCard(month, title) : null, record);
+}
+
+// --- importing all linked files into the HomeBank file ---------------------------------------------------------
+
+const BULK_STATUS = {
+  'new': ['ok', 'new'], 'in HomeBank': ['warn', 'already in HomeBank?'], 'twice': ['warn', 'twice in these files'],
+  'closed': ['bad', 'closed account'], 'split': ['bad', 'split: not imported'], 'unreadable': ['bad', 'unreadable'],
+};
+const BULK_IMPORTABLE = new Set(['new', 'in HomeBank', 'twice']);
+
+function bulkImportCard(month, title) {
+  const days = h('input', { type: 'number', class: 'narrow', min: 0, max: 10, value: app.bulkDays ?? 0, 'aria-label': 'Days apart' });
+  const rules = h('input', { type: 'checkbox', checked: app.bulkRules ?? true });
+  const payee = h('input', { type: 'checkbox', checked: app.bulkPayee ?? false });
+  const area = h('div');
+  const check = h('button', { type: 'button', class: 'primary' }, 'Check the files');
+  const options = () => ({ days: Number(days.value) || 0, rules: rules.checked, payee_defaults: payee.checked });
+  async function load() {
+    Object.assign(app, { bulkDays: Number(days.value) || 0, bulkRules: rules.checked, bulkPayee: payee.checked });
+    const o = options();
+    const res = await api(`/api/import/bulk?month=${encodeURIComponent(month)}&days=${o.days}&rules=${o.rules}&payee_defaults=${o.payee_defaults}`);
+    area.replaceChildren(bulkPlanView(res, o, load));
+  }
+  check.addEventListener('click', () => busy(check, 'Checking', load));
+  return h('div', { class: 'card' },
+    h('h2', { text: `Import into HomeBank` }),
+    h('p', { class: 'small muted', text: `Adds the transactions of every file linked to an account for ${title} to your HomeBank file, as HomeBank's ` +
+      'File > Import would. A prepared file brings the categories you chose; a file you did not prepare gets the suggested ones. Payees that do ' +
+      'not exist yet are added; categories are never created. Transactions that look like ones already in HomeBank are left out unless you tick them.' }),
+    saveModeNote(),
+    h('div', { class: 'row' },
+      h('label', { class: 'small' }, 'Already in HomeBank: same account and amount, at most ', days, ' day(s) apart (HomeBank\'s "date tolerance")'),
+      h('label', { class: 'small' }, rules, ' Run my assignment rules'),
+      h('label', { class: 'small' }, payee, ' Fill empty categories from the payee\'s default'),
+      check),
+    area);
+}
+
+function bulkPlanView(res, options, reload) {
+  const ticked = new Set(res.candidates.filter(c => c.status === 'new').map(c => c.id));
+  const counter = h('span', { class: 'muted small' });
+  const importBtn = h('button', { type: 'button', class: 'primary' });
+  const result = h('div');
+  let show = 'all';
+  const boxes = new Map();
+  function update() {
+    counter.textContent = `${ticked.size} of ${res.candidates.length} ticked`;
+    importBtn.textContent = `Import ${ticked.size} transaction(s) ${inPlace() ? 'into the file' : 'into a new copy'}…`;
+    importBtn.disabled = ticked.size === 0;
+    for (const [id, box] of boxes) box.checked = ticked.has(id);
+  }
+  const fileTable = h('table', { class: 'data' },
+    h('thead', {}, h('tr', {}, ['File', 'Account', 'Categories from', 'Transactions', 'New', 'Already in HomeBank?', 'Twice', 'Not importable', ''].map(t => h('th', { text: t })))),
+    h('tbody', {}, res.files.map(f => {
+      const n = s => f.counts[s] || 0;
+      return h('tr', {},
+        h('td', { text: f.name }), h('td', { text: f.account_name }),
+        h('td', { class: 'small', text: f.prepared ? 'the prepared copy' : 'suggestions (not prepared)' }),
+        h('td', { class: 'num', text: f.transactions }), h('td', { class: 'num', text: n('new') }),
+        h('td', { class: 'num', text: n('in HomeBank') || '' }), h('td', { class: 'num', text: n('twice') || '' }),
+        h('td', { class: 'num', text: (n('closed') + n('split') + n('unreadable')) || '' }),
+        h('td', {}, f.imported ? h('span', { class: 'pill ok', title: `Imported ${String(f.imported.when).replace('T', ' ')} into ${f.imported.into}`,
+          text: 'imported before' }) : null));
+    })));
+  const tbody = h('tbody');
+  const filter = h('select', { onchange: e => { show = e.target.value; draw(); } },
+    h('option', { value: 'all' }, 'All transactions'), h('option', { value: 'flagged' }, 'Only those left out'),
+    h('option', { value: 'ticked' }, 'Only ticked'));
+  function draw() {
+    boxes.clear();
+    const list = res.candidates.filter(c => show === 'all' || (show === 'ticked' ? ticked.has(c.id) : c.status !== 'new'));
+    tbody.replaceChildren(...list.map(c => {
+      const [cls, label] = BULK_STATUS[c.status] || ['', c.status];
+      const box = h('input', { type: 'checkbox', disabled: !BULK_IMPORTABLE.has(c.status), checked: ticked.has(c.id),
+        'aria-label': 'Import this transaction',
+        onchange: e => { if (e.target.checked) ticked.add(c.id); else ticked.delete(c.id); update(); } });
+      boxes.set(c.id, box);
+      const notes = [...c.notes];
+      if (c.match) notes.unshift(`HomeBank has ${c.match.date}: ${c.match.memo} (${Number(c.match.amount).toFixed(2)})`);
+      return h('tr', { class: c.status === 'new' ? null : 'warn-row' },
+        h('td', {}, box), h('td', { class: 'small', text: c.file }), h('td', { class: 'nowrap', text: c.date }),
+        h('td', { text: c.memo }),
+        h('td', {}, c.payee, c.new_payee ? h('span', { class: 'pill', text: 'new payee' }) : null),
+        h('td', { class: 'num', text: Number(c.amount).toFixed(2) }),
+        h('td', {}, c.category, c.category_from ? h('div', { class: 'small muted', text: `from ${c.category_from}` }) : null),
+        h('td', {}, h('span', { class: `pill ${cls}`, text: label })),
+        h('td', { class: 'small', text: notes.join('; ') }));
+    }));
+    update();
+  }
+  draw();
+  const setAll = on => { for (const c of res.candidates) if (c.status === 'new') { if (on) ticked.add(c.id); else ticked.delete(c.id); } update(); };
+  importBtn.addEventListener('click', () => {
+    if (!confirmWrite(`Import ${ticked.size} transaction(s)`)) return;
+    busy(importBtn, 'Importing', async () => {
+      const out = await api('/api/import/bulk/apply', { month: res.month, ...options, chosen: [...ticked], sha256: res.sha256 });
+      const next = [];
+      if (out.output && !out.in_place) {
+        next.push(h('button', { type: 'button', onclick: async () => {
+          try { await api('/api/select', { path: out.output }); app.status = await api('/api/status'); updateHeader(); toast('The new copy is now the file the toolkit works on.'); }
+          catch (err) { toast(err.message, true); }
+        } }, 'Work on the new copy from now on'));
+      }
+      if (out.output) next.push(h('button', { type: 'button', onclick: () => go('transfers') }, 'Next: link transfers →'));
+      result.replaceChildren(summaryView(out.summary), next.length ? h('div', { class: 'row' }, next) : null);
+      result.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+  const flagged = res.candidates.filter(c => c.status !== 'new').length;
+  return h('div', {},
+    h('div', { class: 'table-wrap' }, fileTable),
+    res.not_linked.length ? h('div', { class: 'notice warn', text: `Not linked to an account yet, so not included: ${res.not_linked.join(', ')}.` }) : null,
+    res.new_payees.length ? h('p', { class: 'small', text: `New payees that will be added: ${res.new_payees.join(', ')}.` }) : null,
+    flagged ? h('div', { class: 'notice warn', text: `${flagged} transaction(s) are left out: they look like ones already in HomeBank, appear in two files, ` +
+      'or cannot be imported. Tick the ones you do want.' }) : null,
+    h('div', { class: 'toolbar' }, h('button', { type: 'button', onclick: () => setAll(true) }, 'Tick all new'),
+      h('button', { type: 'button', onclick: () => setAll(false) }, 'Untick all new'), filter, counter,
+      h('span', { class: 'spacer' }), importBtn),
+    h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
+      h('thead', {}, h('tr', {}, ['', 'File', 'Date', 'Description', 'Payee', 'Amount', 'Category', 'Status', 'Notes'].map(t => h('th', { text: t })))),
+      tbody)),
+    result);
 }
 
 async function importPreview(month, file, account, onSaved) {
@@ -973,7 +1140,7 @@ async function viewFill() {
   const boxes = [];
   const fillCells = {};
   const allBox = h('input', { type: 'checkbox', title: 'Select all', onchange: e => setAll(e.target.checked) });
-  const fillBtn = h('button', { type: 'button', class: 'primary', disabled: true }, 'Fill in a new copy…');
+  const fillBtn = h('button', { type: 'button', class: 'primary', disabled: true }, inPlace() ? 'Fill in the file…' : 'Fill in a new copy…');
   const result = h('div');
 
   function update() {
@@ -1046,7 +1213,7 @@ async function viewFill() {
 
   fillBtn.addEventListener('click', () => {
     const n = Number(fillBtn.dataset.count);
-    if (!confirm(`Fill ${n} empty categor${n === 1 ? 'y' : 'ies'} in a NEW copy of your HomeBank file?\nYour original file will not be changed.`)) return;
+    if (!confirmWrite(`Fill ${n} empty categor${n === 1 ? 'y' : 'ies'}`)) return;
     busy(fillBtn, 'Filling', async () => {
       const res = await api('/api/fill/apply', { rules: [...selected], sha256: info.sha256 });
       result.replaceChildren(summaryView(res.summary));
@@ -1058,7 +1225,8 @@ async function viewFill() {
   main(
     h('h1', { text: 'Fill empty categories' }),
     h('p', { class: 'lead', text: 'Apply the rules you tick to every transaction without a category, in all accounts at once. ' +
-      'Only empty categories are filled; categories you set, payees, tags and amounts are never changed. The result is a NEW copy of your file.' }),
+      'Only empty categories are filled; categories you set, payees, tags and amounts are never changed.' }),
+    saveModeNote(),
     facts,
     leftOut.length ? h('div', { class: 'notice warn', text: `Left out: ${leftOut.map(([why, n]) => `${n} rule(s): ${why}`).join('; ')}.` }) : null,
     info.closed_skipped ? h('p', { class: 'small muted', text: `${info.closed_skipped} transaction(s) without a category in closed accounts are left alone (HomeBank does not assign there either).` }) : null,
@@ -1144,10 +1312,10 @@ async function viewTransfers() {
   }
 
   const result = h('div');
-  const linkBtn = h('button', { type: 'button', class: 'primary', disabled: true }, 'Link selected in a new copy…');
+  const linkBtn = h('button', { type: 'button', class: 'primary', disabled: true }, inPlace() ? 'Link selected in the file…' : 'Link selected in a new copy…');
   linkBtn.addEventListener('click', () => {
     const pairs = [...picked, ...chosen.values()].map(k => k.split(':').map(Number));
-    if (!confirm(`Link ${pairs.length} transfer(s) in a NEW copy of your HomeBank file?\nYour original file will not be changed.`)) return;
+    if (!confirmWrite(`Link ${pairs.length} transfer(s)`)) return;
     busy(linkBtn, 'Linking', async () => {
       const res = await api('/api/transfers/link', { days: info.days, sha256: info.sha256, pairs });
       result.replaceChildren(summaryView(res.summary));
@@ -1159,8 +1327,8 @@ async function viewTransfers() {
   const parts = [
     h('h1', { text: 'Link transfers' }),
     h('p', { class: 'lead', text: 'Transfers between your own accounts arrive from QIF and CSV files as two separate transactions. ' +
-      'After importing in HomeBank, save, copy the file into the data folder, and link them here: the toolkit writes a NEW copy ' +
-      'in which each pair is a HomeBank transfer. Only transactions without a category are considered.' }),
+      'After importing, link them here: each pair you tick becomes a HomeBank transfer. Only transactions without a category are considered.' }),
+    saveModeNote(),
     h('div', { class: 'row' }, h('label', { text: 'At most' }), daysInput, h('span', { text: 'days apart' }), again),
     h('div', { class: 'facts' }, fact(info.considered, 'transactions without a category'), fact(info.pairs.length, 'pairs'),
       fact(info.choices.length, 'groups to choose in'), fact(info.lonely.length, 'without another side')),
@@ -1241,7 +1409,8 @@ const VIEWS = { file: viewFile, analyse: viewAnalyse, review: viewReview, fill: 
 
 function updateHeader() {
   const s = app.status;
-  document.getElementById('current-file').textContent = s && s.selected ? `File: ${s.selected.name}` : 'No file chosen';
+  document.getElementById('current-file').textContent = s && s.selected
+    ? `File: ${s.selected.name}${s.in_place ? ' · changed directly' : ''}` : 'No file chosen';
   document.getElementById('version').textContent = s ? `hbkit ${s.version}` : '';
 }
 

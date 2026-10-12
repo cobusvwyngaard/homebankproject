@@ -1,4 +1,4 @@
-"""Targeted edits to a NEW copy of a HomeBank file.
+"""Targeted edits to a HomeBank file, saved as a new copy or (when the owner chooses) into the file itself.
 
 The writer never re-creates the whole file. It copies the original bytes and
 splices in only the intended changes (insert, replace or remove an element), so
@@ -8,13 +8,20 @@ attributes this toolkit does not know, and the file's line endings.
 New elements are formatted by hbkit.xhb.serialise exactly as HomeBank 5.10.3 would.
 
 Before saving, the result is read back and compared element by element with what
-was intended; the save is refused if anything else differs. The input file is
-never overwritten.
+was intended; the save is refused if anything else differs.
+
+By default the result is a new copy and the input file is never overwritten. The owner
+can choose to change the file itself (`save_in_place`): then the file must still be
+exactly the one that was read, HomeBank must not be running (it would write its own
+version over the change when it saves), a backup of the file as it was is written
+first, and the file is replaced in one step (a temporary file renamed over it).
 """
 
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -42,6 +49,32 @@ class SaveResult:
     replaced: int = 0
     removed: int = 0
     added_lines: list[str] = field(default_factory=list, repr=False)
+    #: when the file itself was changed: the copy of the file as it was before
+    backup: Path | None = None
+
+    @property
+    def in_place(self) -> bool:
+        return self.backup is not None
+
+
+def homebank_running() -> bool | None:
+    """Whether HomeBank runs on this computer; None when that cannot be told."""
+    try:
+        if os.name == "nt":
+            res = subprocess.run(["tasklist", "/FI", "IMAGENAME eq homebank.exe", "/FO", "CSV", "/NH"],
+                                 capture_output=True, text=True, timeout=15,
+                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            if res.returncode != 0:
+                return None
+            return "homebank.exe" in res.stdout.casefold()
+        res = subprocess.run(["pgrep", "-i", "-x", "homebank"], capture_output=True, timeout=15)
+        return {0: True, 1: False}.get(res.returncode)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+HOMEBANK_RUNNING = ("HomeBank is running. Close it before the toolkit changes your file itself (when HomeBank "
+                    "saves, it writes its own version over the file); nothing was changed")
 
 
 class XhbEditor:
@@ -131,6 +164,18 @@ class XhbEditor:
         self._touched.add(el.start)
         return el
 
+    def insert_after(self, entity: Entity, text: str) -> None:
+        """Insert a new element right after an element read from the file. Several
+        inserts after the same element keep the order in which they were added."""
+        el = entity.src
+        if el is None or el.depth != 1:
+            raise WriteRefusedError("new elements can only follow an element read from the file")
+        self._add(_Edit(el.end, el.end, [text], "insert", el))
+
+    def insert_after_section(self, name: str, text: str) -> None:
+        """Insert after the last element of `name`, or where HomeBank would put it."""
+        self._insert_after_section(name, text)
+
     def _insert_after_section(self, name: str, text: str) -> None:
         """Insert after the last element of `name`, or where HomeBank would put it."""
         rank = F.SAVE_ORDER.index(name)
@@ -204,17 +249,62 @@ class XhbEditor:
         data = self.render()
         self.verify(data)
         output.parent.mkdir(parents=True, exist_ok=True)
-        tmp = output.with_name(output.name + ".tmp")
+        _write_replace(output, data)
+        return self._result(output)
+
+    def save_in_place(self, input_path: str | Path, backup_dir: str | Path) -> SaveResult:
+        """Change the file itself, after writing a copy of it as it was into `backup_dir`.
+
+        Refused (nothing written) when the file on disk is no longer the one that was
+        read, or when HomeBank is running.
+        """
+        from ..privacy import timestamp
+
+        input_path = Path(input_path)
+        data = self.render()
+        self.verify(data)
         try:
-            with open(tmp, "wb") as fh:
-                fh.write(data)
-                fh.flush()
-                os.fsync(fh.fileno())
-            os.replace(tmp, output)
-        finally:
-            if tmp.exists():
-                tmp.unlink()
-        result = SaveResult(path=output)
+            current = input_path.read_bytes()
+        except OSError:
+            raise WriteRefusedError("the HomeBank file could not be read again, so it was not changed") from None
+        if current != self.book.raw:
+            raise WriteRefusedError("the HomeBank file has changed since the toolkit read it (saved in HomeBank?); "
+                                    "nothing was changed. Load the page again and repeat the step")
+        if homebank_running():
+            raise WriteRefusedError(HOMEBANK_RUNNING)
+        backup_dir = Path(backup_dir)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        stem = f"{input_path.stem}_before_{timestamp()}"
+        backup = backup_dir / f"{stem}.xhb"
+        n = 2
+        while backup.exists():
+            backup = backup_dir / f"{stem}_{n}.xhb"
+            n += 1
+        _write_replace(backup, current)
+        if backup.read_bytes() != current:
+            raise WriteRefusedError("the backup could not be written correctly, so the file was not changed")
+        try:
+            _write_replace(input_path, data, mode_from=input_path)
+        except OSError:
+            raise WriteRefusedError("the HomeBank file could not be replaced (is it open in another program?); "
+                                    "it was not changed") from None
+        if input_path.read_bytes() != data:
+            raise WriteRefusedError("the HomeBank file was not written correctly; put the backup back in its place")
+        result = self._result(input_path)
+        result.backup = backup
+        return result
+
+    def save_to(self, output: str | Path | None, input_path: str | Path,
+                backup_dir: str | Path | None = None) -> SaveResult:
+        """A new copy at `output`, or (output None) the file itself with a backup in `backup_dir`."""
+        if output is not None:
+            return self.save(output, input_path=input_path)
+        if backup_dir is None:
+            raise WriteRefusedError("a backup folder is needed to change the file itself")
+        return self.save_in_place(input_path, backup_dir)
+
+    def _result(self, path: Path) -> SaveResult:
+        result = SaveResult(path=path)
         for e in self._edits:
             if e.kind == "insert":
                 result.inserted += len(e.new)
@@ -224,6 +314,38 @@ class XhbEditor:
                 result.removed += 1
             result.added_lines += e.new
         return result
+
+
+def _write_replace(target: Path, data: bytes, mode_from: Path | None = None) -> None:
+    """Write `data` to a temporary file next to `target`, then rename it over `target`."""
+    tmp = target.with_name(target.name + ".hbkit-tmp")
+    try:
+        with open(tmp, "wb") as fh:
+            fh.write(data)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if mode_from is not None:
+            try:
+                shutil.copymode(mode_from, tmp)
+            except OSError:
+                pass
+        os.replace(tmp, target)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+def describe_save(s, saved: SaveResult, check: str) -> None:
+    """The output lines and notes of a Summary after saving (`check`: what to look at in HomeBank)."""
+    if saved.in_place:
+        s.output("Changed file", saved.path)
+        s.output("Backup of the file as it was", saved.backup)
+        s.note(f"Your HomeBank file itself was changed. Open it in HomeBank and check {check}.")
+        s.note("To undo, close HomeBank and put the backup in its place (rename it to the file's name).")
+    else:
+        s.output("New copy", saved.path)
+        s.note(f"Your original file was not changed. Open the new copy in HomeBank, check {check},")
+        s.note("and use the copy once you are happy with it (keep the original as a backup).")
 
 
 def _same_file(a: Path, b: Path) -> bool:

@@ -25,7 +25,7 @@ from ..privacy import Summary, timestamp
 from ..xhb import format as F
 from ..xhb import serialise as S
 from ..xhb.model import Book, Transaction
-from ..xhb.writer import XhbEditor
+from ..xhb.writer import XhbEditor, describe_save
 from .engine import Matcher, SimRule, TextView, existing_rules
 
 
@@ -103,9 +103,10 @@ def default_output(out_root: Path) -> Path:
     return output
 
 
-def fill_categories(book: Book, rule_ids: list[str], input_path: Path, output: Path,
-                    expected_sha256: str | None = None) -> tuple[Summary, Path | None]:
-    """Fill empty categories with the chosen rules (by id, e.g. "E12") in a new copy."""
+def fill_categories(book: Book, rule_ids: list[str], input_path: Path, output: Path | None,
+                    expected_sha256: str | None = None, backup_dir: Path | None = None) -> tuple[Summary, Path | None]:
+    """Fill empty categories with the chosen rules (by id, e.g. "E12") in a new copy at
+    `output`, or (output None) in the file itself after a backup in `backup_dir`."""
     plan = plan_fill(book)
     if expected_sha256 and expected_sha256 != plan.source_sha256:
         raise HbkitError("the HomeBank file has changed since the rules were listed; list them again")
@@ -127,10 +128,8 @@ def fill_categories(book: Book, rule_ids: list[str], input_path: Path, output: P
     editor = XhbEditor(book)
     for i, (_, cat) in sorted(decided.items()):
         editor.replace(plan.txns[i], {"category": str(cat)}, order=S.OPE_ATTRIBUTE_ORDER)
-    saved = editor.save(output, input_path=input_path)
+    saved = editor.save_to(output, input_path, backup_dir)
     s.count("Categories filled", saved.replaced)
     s.count("Still without a category", len(plan.txns) - saved.replaced)
-    s.output("New copy", saved.path)
-    s.note("Your original file was not changed. Open the new copy in HomeBank, check the categories,")
-    s.note("and use the copy once you are happy with it (keep the original as a backup).")
+    describe_save(s, saved, "the categories")
     return s, saved.path

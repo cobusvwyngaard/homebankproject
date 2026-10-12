@@ -189,6 +189,22 @@ def timestamp() -> str:
     return datetime.now().strftime("%Y-%m-%d_%H%M%S")
 
 
+def backup_dir(out_root: Path) -> Path:
+    """Where a copy of the HomeBank file is kept before the toolkit changes the file itself."""
+    return Path(out_root) / "backups"
+
+
+def save_target(out_root: Path, output: str | None, in_place: bool, default_output) -> tuple[Path | None, Path]:
+    """(new copy path or None for the file itself, backup folder) from command-line options."""
+    if in_place and output:
+        from .errors import HbkitError
+
+        raise HbkitError("give either --output (a new copy) or --in-place (the file itself), not both")
+    if in_place:
+        return None, backup_dir(out_root)
+    return (Path(output) if output else default_output(Path(out_root))), backup_dir(out_root)
+
+
 def new_run_dir(out_root: Path, name: str) -> Path:
     """A fresh folder for one run: <out>/<name>/<date_time>/ (never reused)."""
     base = Path(out_root) / name

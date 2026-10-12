@@ -66,7 +66,9 @@ ANALYSIS = CategoryTrends()
 * `hbkit.rules.normalise.normalise(text)`: clean a bank description.
 * `hbkit.export.sqlite.build_database(book, conn)`: an in-memory SQLite copy, if SQL
   is easier: `conn = sqlite3.connect(":memory:")`.
-* `hbkit.xhb.writer.XhbEditor`: targeted changes written to a new copy of the file.
+* `hbkit.xhb.writer.XhbEditor`: targeted changes written to a new copy of the file
+  (`save`), or into the file itself after a backup when the owner chose so
+  (`save_to(None, input_path, backup_dir)`; report the result with `describe_save`).
 
 ## Tests
 

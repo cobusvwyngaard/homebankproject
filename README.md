@@ -7,20 +7,22 @@ A small program that runs on your own computer and analyses your HomeBank file
 * **export** your file to a SQLite database you can query;
 * run **analyses** — today: an overview, and **assignment-rule mining**, which suggests
   HomeBank rules from how you categorised your transactions in the past;
-* add the rules you approve to a **new copy** of your file. Your original file is
-  never changed;
-* **fill empty categories** with the rules you choose, in all accounts at once, again in
-  a new copy;
-* **prepare the files you download from your banks** (QIF or HomeBank CSV) before you
-  import them: it fills in categories from each account's own history — something
+* add the rules you approve to your file;
+* **fill empty categories** with the rules you choose, in all accounts at once;
+* **prepare the files you download from your banks** (QIF, CSV or PDF statements) before
+  you import them: it fills in categories from each account's own history — something
   HomeBank's rules cannot do — and remembers which file belongs to which account;
+* **import** those files into your HomeBank file **in one go**, all accounts of a month
+  at once, the way HomeBank's own import does;
 * **link transfers** between your own accounts that arrived as two separate
-  transactions, in a new copy of your file;
+  transactions;
 * make **reports** — an annual overview, category trends (with inflation) and a tax-year
   statement — as pages that open in your browser and work offline.
 
 HomeBank stays your system of record: for analyses and reports the toolkit only *reads*
-your file.
+your file. When it changes your file (rules, categories, imports, transfers) it writes a
+**new copy** by default, so your original is never touched. If you prefer, you can let it
+change the file itself, after a backup — see [Changing your file itself](#changing-your-file-itself).
 
 You can use it in your **web browser** (easiest) or by typing commands in PowerShell.
 It needs only Python. The reports also use one chart library (Plotly), which is included
@@ -151,12 +153,13 @@ close the window or press Ctrl+C in it.
 The pages, from left to right:
 
 1. **File** — choose your HomeBank file (the one in the `data` folder is chosen for you)
-   and check that the toolkit understands it.
+   and check that the toolkit understands it. Here you also choose whether changes go
+   into a new copy or into the file itself.
 2. **Analyse** — run an analysis, change its options under *Options*, and see the summary.
 3. **Rule review** — the suggested rules in a table. Tick the ones you want, change the
    text or category if you like (the category box suggests your categories as you type),
-   filter and sort, then click **Add approved rules to a new copy…**. *Save approvals*
-   keeps your ticks for later.
+   filter and sort, then click **Add approved rules to a new copy…** (or *…to the
+   file…*). *Save approvals* keeps your ticks for later.
    * **View** shows every transaction a rule matches, so you can check that they belong
      together: grouped by description (card numbers, dates and references removed), or
      one by one, with how many have the rule's category, another category (highlighted)
@@ -171,9 +174,10 @@ The pages, from left to right:
      back-test and the suggestions that were set aside.
 4. **Fill categories** — apply the rules you tick to every transaction without a
    category, in all accounts at once. See [Filling empty categories](#filling-empty-categories).
-5. **Imports** — prepare the files from your banks before you import them in HomeBank:
-   choose the month, add the files, check the account each one is linked to, then
-   *Prepare…* to see and edit the categories and save the prepared copy. See
+5. **Imports** — prepare the files from your banks: choose the month, add the files,
+   check the account each one is linked to, then *Prepare…* to see and edit the
+   categories. *Import into HomeBank* then adds all of them to your file in one go (or
+   import each prepared copy in HomeBank). See
    [Preparing bank files for import](#preparing-bank-files-for-import).
 6. **Transfers** — after importing, link transfers between your own accounts that
    arrived as two separate transactions. See [Linking transfers](#linking-transfers).
@@ -186,6 +190,43 @@ The pages, from left to right:
 
 The browser interface and the commands below do exactly the same work and write to
 the same `data\out` folder, so you can mix them.
+
+---
+
+## Changing your file itself
+
+By default every change — rules, filled categories, imports, linked transfers — goes into
+a **new copy** in `data\out` (`with-rules_…`, `with-categories_…`, `with-imports_…`,
+`with-transfers_…`). Your file is never touched; you open the copy in HomeBank, check it,
+and use it as your file.
+
+On the **File** page, under *When the toolkit changes your file*, you can choose
+**Change this file itself** instead. Then each step writes straight into the chosen file,
+so the next step works on the result: for example import a month, link its transfers,
+then fill the categories that are still empty — without juggling copies. The choice is
+remembered (in `data\ui-settings.json`); the pages that change your file say which way it
+goes, and the top bar shows *changed directly*.
+
+What protects your file:
+
+* **A backup first.** Before every change, the file as it was is copied to
+  `data\out\backups\<name>_before_<date_time>.xhb`. To undo a change, close HomeBank and
+  put that backup in the file's place (rename it to the file's name).
+* **HomeBank must be closed.** HomeBank does not notice when another program changes the
+  file, and when you save in HomeBank it writes its own version over the toolkit's
+  changes. The toolkit therefore refuses while HomeBank is running.
+* **Only the file it read.** If the file changed on disk since the page was loaded (you
+  saved in HomeBank meanwhile), the toolkit refuses and asks you to repeat the step.
+* The new version is checked element by element before it is written, written to a
+  temporary file next to yours and then put in its place in one step, and read back.
+
+The file in the `data` folder is a copy you made of your HomeBank file. Changing it
+does not change the file HomeBank opens. Either open the `data` copy in HomeBank
+afterwards (and keep using that one), or on the File page paste the full path of the
+file HomeBank opens, so that the toolkit changes that one.
+
+From PowerShell, add `--in-place` to `apply-rules`, `fill-categories --review`,
+`link-transfers --review` or `import-files`.
 
 ---
 
@@ -378,7 +419,7 @@ it:
    ```
 
    This writes a new file `data\out\with-rules_<date_time>.xhb`. Your original is not
-   touched.
+   touched (with `--in-place`, the rules go into the file itself after a backup).
    * The new rules are placed after your existing ones: account rules first, then longer
      (more specific) texts before shorter ones.
    * They match "contains, ignoring case" on the memo, and set the category only when
@@ -412,10 +453,11 @@ categories** page does it more carefully:
   another rule".
 * **View** lists the transactions a rule matches and which rule fills each with your
   selection, so you can check them before filling.
-* **Fill in a new copy…** writes `data\out\with-categories_<date_time>.xhb`. Only the
-  empty category fields change: categories you set, payees, payment modes, tags and
-  amounts stay exactly as they were. The copy is checked before it is saved, and your
-  original file is not changed.
+* **Fill in a new copy…** writes `data\out\with-categories_<date_time>.xhb` (or, with
+  [Change this file itself](#changing-your-file-itself), **Fill in the file…** changes the
+  file after a backup). Only the empty category fields change: categories you set,
+  payees, payment modes, tags and amounts stay exactly as they were. The result is
+  checked before it is saved.
 
 Open the copy in HomeBank, check it, and use it as your file once you are happy (keep the
 original as a backup).
@@ -489,12 +531,71 @@ before you import it, and HomeBank keeps them.
 6. **Save prepared file.** It goes to `data\out\imports\<month>\prepared\<name>-prepared.qif`
    (or `.csv`; a PDF statement becomes `<name>-prepared.csv`). *Show in folder* opens it
    in Explorer.
-7. In HomeBank, use *File → Import* with the **prepared** file and import it into the
+7. Import: either all files at once with **Import into HomeBank** (next section), or
+   one by one in HomeBank with *File → Import*, choosing the **prepared** file and the
    same account. HomeBank keeps the categories from the file: "auto from payee" and
    "set category" rules only fill empty categories. Only an **overwrite** rule replaces
    one; the table warns when that would happen.
 
-The *Import record* at the bottom lists every file, its account and month.
+The *Import record* at the bottom lists every file, its account and month, and when it
+was imported with the toolkit.
+
+### Importing into HomeBank in one go
+
+The **Import into HomeBank** part of the Imports page adds the transactions of every file
+of the month that is linked to an account to your HomeBank file — a new copy
+(`data\out\with-imports_<date_time>.xhb`) or, if you chose so on the File page, the file
+itself. It does what HomeBank's *File → Import* does, for all the files at once:
+
+* Each transaction gets its date, amount, memo, info and payment mode from the file, in
+  the linked account. HomeBank CSV's "internal transfer" payment mode becomes "bank
+  transfer", as in HomeBank.
+* **Categories**: from the prepared copy when you prepared the file (the categories you
+  chose); otherwise the suggested ones, as *Prepare…* would show them. Only categories
+  that exist in your file are used; none are created.
+* **Payees** are found by name (capitals and surrounding spaces do not matter); a payee
+  that does not exist yet is added, as HomeBank does. The page lists them first.
+* The options are HomeBank's own: **Run my assignment rules** (on by default) applies
+  your rules to the new transactions only, exactly as HomeBank's "Run automatic
+  assignment rules" — set or overwrite payee, category, payment mode and tags; **Fill
+  empty categories from the payee's default** is HomeBank's "Enrich with payee default"
+  (off by default, as in HomeBank).
+* **Left out unless you tick them**, as in HomeBank's import assistant:
+  * *already in HomeBank?* — the account already has a transaction with the same amount
+    on the same day (or at most the number of days you set, HomeBank's "date
+    tolerance"). The page shows that transaction next to it. One existing transaction
+    accounts for one imported one only, so two equal purchases on one day are not both
+    hidden by one;
+  * *twice in these files* — the same transaction in two files of the same account
+    (overlapping downloads).
+* **Not imported**: transactions into a **closed** account (HomeBank refuses those too),
+  and **split** transactions (enter them in HomeBank).
+* Click **Check the files**, look through the list (*Tick all new* / *Untick all new*,
+  and a filter to show only those left out), then **Import N transaction(s)…**.
+* Afterwards, link the transfers between your own accounts on the **Transfers** page. When
+  the import went into a new copy, *Work on the new copy from now on* makes the toolkit
+  use that copy for the next steps.
+
+Differences from importing in HomeBank, so you know what to expect: a QIF transfer line
+(`L[Account]`) arrives as an ordinary transaction to link on the Transfers page (HomeBank
+links it, or even creates the account); a category in a file that does not exist in
+HomeBank is left empty (HomeBank creates it); when a rule replaces a new payee, that
+unused payee is not added; cheque numbers are not carried into the account's next cheque
+number; a QIF file's cleared/reconciled marks (`C` lines) are not carried over (new
+transactions have no status); "Import as pending" is not offered. The toolkit cannot see your HomeBank
+preferences, so it imports as HomeBank does with its standard import settings (QIF memo
+kept, payee and memo not swapped, no capitalising).
+
+From PowerShell, after linking the files with `prepare-import` (or on the Imports page):
+
+```powershell
+.\hb import-files --month 2026-04
+.\hb import-files --month 2026-04 --in-place --days 2
+```
+
+It imports everything not left out, and writes a list of every transaction and what
+happened to it to `data\out\import-files\<date_time>\transactions.csv`. Options:
+`--no-rules`, `--payee-defaults`, `--days N`, `--output` or `--in-place`.
 
 ### The same from PowerShell
 
@@ -521,6 +622,9 @@ are written; the screen shows only counts. Use the browser to see and change the
   payee. If your card purchases carry your own name there, tell Claude, and it can be
   left out for those.
 * HomeBank's import also lets you choose the account; choose the same one.
+* Import each month's files only once: either with the toolkit or in HomeBank. A second
+  import finds the transactions *already in HomeBank* and leaves them out, but different
+  downloads of the same month can describe a transaction differently.
 * A category name the toolkit writes always exists in your HomeBank file (HomeBank
   would otherwise create a new category).
 
@@ -535,8 +639,10 @@ ordinary transactions, usually without a category (HomeBank's CSV import even tu
 "internal transfer" payment mode into an ordinary "bank transfer"). The toolkit links
 them **after** you have imported everything.
 
-1. Import the month's files in HomeBank and save. Close HomeBank and copy the file into
-   the `data` folder.
+1. Import the month's files: with **Import into HomeBank** on the Imports page (then the
+   toolkit already works on the result when you change the file itself, or after *Work on
+   the new copy from now on*), or in HomeBank — then save, close HomeBank and copy the
+   file into the `data` folder.
 2. Open **Transfers** in the browser interface. Only transactions **without a category**
    in open accounts are considered.
    * **Pairs**: money out in one account and exactly the same amount into another (same
@@ -552,11 +658,12 @@ them **after** you have imported everything.
      "bank transfer", the text names another of your accounts, or described like earlier
      transfers) but have no partner, for example because the other account is not
      imported. They are only listed: handle them by hand in HomeBank.
-3. Click **Link selected in a new copy…**. The new copy is
-   `data\out\with-transfers_<date_time>.xhb`; your original file is not changed. In the
-   copy each pair is linked exactly as HomeBank links a transfer by hand: both sides get
-   the transfer mark, the other account and a shared transfer number. Nothing else
-   changes, and the copy is checked before it is saved.
+3. Click **Link selected in a new copy…** (or **…in the file…** when you chose to
+   [change the file itself](#changing-your-file-itself)). The new copy is
+   `data\out\with-transfers_<date_time>.xhb`; your original file is not changed. Each
+   pair is linked exactly as HomeBank links a transfer by hand: both sides get the
+   transfer mark, the other account and a shared transfer number. Nothing else changes,
+   and the result is checked before it is saved.
 4. Open the copy in HomeBank and check the transfers. When you are happy, close
    HomeBank, keep your original as a backup and use the copy as your file (rename it to
    your file's name).
@@ -727,6 +834,10 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 | `could not tell which account this file belongs to` | Give it with `--account "name as in HomeBank"`, or choose it on the Imports page. |
 | `the HomeBank file has changed since the rules were listed` | Reload the Fill categories page (or run `fill-categories` without `--review`) and choose again. |
 | `the HomeBank file has changed since the transfers were listed` | List the transfers again (*Find again* on the Transfers page, or run `link-transfers` without `--review`). |
+| `HomeBank is running. Close it before the toolkit changes your file itself …` | You chose to change the file itself. Close HomeBank (save there first if you changed something), load the page again and repeat the step. |
+| `the HomeBank file has changed since the toolkit read it …` | The file was saved (in HomeBank, or copied over) after the page was loaded. Load the page again and repeat the step. |
+| `the HomeBank file could not be replaced (is it open in another program?)` | Close programs that may hold the file (HomeBank, a backup or sync tool) and repeat; the file was not changed. |
+| `no files of that month are linked to an account` | Add the month's files and link them to their accounts first (Imports page or `prepare-import`). |
 | `import-accounts.json in the data folder could not be read` | It was damaged (e.g. edited by hand). Rename it; a new import record is started. |
 
 ---
@@ -745,5 +856,6 @@ are in [docs/adding-an-analysis.md](docs/adding-an-analysis.md).
 * The reader copies the original file's bytes exactly, and the writer splices changes
   into a copy. An unchanged file therefore comes back byte for byte, and an edited copy
   differs only in the intended lines; both are checked by the tests and again before
-  every save.
+  every save. New elements (imported transactions, payees, rules) are written exactly as
+  HomeBank 5.10.3 writes them.
 * Project rules for Claude, including the privacy rules: [CLAUDE.md](CLAUDE.md)

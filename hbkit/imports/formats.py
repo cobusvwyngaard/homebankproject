@@ -76,6 +76,19 @@ class ImportTxn:
     transfer: bool = False  # internal transfer: never given a category
     split: bool = False  # split transaction: its categories are in the split lines
     paymode: int = 0
+    tags: str = ""  # HomeBank CSV: the tags column (names separated by spaces)
+    #: memo and info as HomeBank stores them on import, where they differ from the
+    #: cleaned values above (HomeBank keeps a QIF memo's and a CSV memo's spaces)
+    raw_memo: str | None = None
+    raw_info: str | None = None
+
+    @property
+    def memo_as_imported(self) -> str:
+        return self.memo if self.raw_memo is None else self.raw_memo
+
+    @property
+    def info_as_imported(self) -> str:
+        return self.info if self.raw_info is None else self.raw_info
 
     @property
     def can_take_category(self) -> bool:
@@ -255,6 +268,7 @@ def _read_qif(name: str, raw: bytes, lines: list[bytes], encoding: str) -> Impor
             memo=value("M"), payee=value("P"), info=value("N"),
             category="" if category.startswith("[") else category,
             transfer=category.startswith("["), split="S" in fields,
+            raw_memo=fields["M"][0][1].rstrip("\r\n") if "M" in fields else None,
         )
         if txn.date is None or amount is None:
             f.problems.append(start + 1)
@@ -296,11 +310,12 @@ def _read_csv(name: str, raw: bytes, lines: list[bytes], encoding: str) -> Impor
         for i, line in enumerate(lines):
             spans = _split_fields(line, ord(sep))
             if len(spans) == CSV_COLUMNS:
-                values = [_unquote(_text(line[a:b], encoding)).strip() for a, b in spans]
+                texts = [_unquote(_text(line[a:b], encoding)) for a, b in spans]
+                values = [t.strip() for t in texts]
                 if i == 0:
                     values[0] = values[0].lstrip("﻿")
                 if _date_parts(values[0]):
-                    rows.append((i, spans, values))
+                    rows.append((i, spans, values, texts))
         if rows and (best is None or len(rows) > len(best[1])):
             best = (sep, rows)
     if best is None:
@@ -310,15 +325,16 @@ def _read_csv(name: str, raw: bytes, lines: list[bytes], encoding: str) -> Impor
     if len(rows) * 2 < len(content):
         return None
     f = ImportFile(name, "csv", raw, encoding, [], separator=sep)
-    f.date_order = order = date_order([v[0] for _, _, v in rows])
-    valid = {i for i, _, _ in rows}
+    f.date_order = order = date_order([v[0] for _, _, v, _ in rows])
+    valid = {i for i, _, _, _ in rows}
     f.problems = [i + 1 for i in content if i not in valid]
-    for i, spans, v in rows:
+    for i, spans, v, texts in rows:
         paymode = int(v[1]) if v[1].isdigit() else 0
         txn = ImportTxn(
             index=len(f.txns), line=i + 1, date=parse_date(v[0], order), amount=parse_amount(v[5]),
             memo=v[4], payee=v[3], info=v[2], category=v[CSV_CATEGORY],
-            transfer=paymode == CSV_TRANSFER_PAYMODE, paymode=paymode,
+            transfer=paymode == CSV_TRANSFER_PAYMODE, paymode=paymode, tags=v[7],
+            raw_memo=texts[4], raw_info=texts[2],
         )
         if txn.date is None or txn.amount is None:
             f.problems.append(i + 1)

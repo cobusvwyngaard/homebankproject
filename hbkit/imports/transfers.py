@@ -36,7 +36,7 @@ from ..rules.normalise import normalise
 from ..xhb import format as F
 from ..xhb import serialise as S
 from ..xhb.model import Book, Transaction
-from ..xhb.writer import XhbEditor
+from ..xhb.writer import XhbEditor, describe_save
 
 DEFAULT_DAYS = 4
 MAX_DAYS = 31
@@ -214,9 +214,10 @@ def default_output(out_root: Path) -> Path:
     return output
 
 
-def link_transfers(book: Book, chosen: list[tuple[int, int]], days: int, input_path: Path, output: Path,
-                   expected_sha256: str | None = None) -> tuple[Summary, Path | None]:
-    """Link the chosen pairs (out index, in index) in a new copy of the file.
+def link_transfers(book: Book, chosen: list[tuple[int, int]], days: int, input_path: Path, output: Path | None,
+                   expected_sha256: str | None = None, backup_dir: Path | None = None) -> tuple[Summary, Path | None]:
+    """Link the chosen pairs (out index, in index) in a new copy at `output`, or (output
+    None) in the file itself after a backup in `backup_dir`.
 
     The pairs are checked again against the file as it is now: each must still be a
     possible transfer, and no transaction may be used twice.
@@ -252,10 +253,8 @@ def link_transfers(book: Book, chosen: list[tuple[int, int]], days: int, input_p
         for this, other in ((p.out, p.into), (p.into, p.out)):
             editor.replace(this, {"flags": str(this.flags | F.OF_INTXFER), "dst_account": str(other.account_key),
                                   "kxfer": str(kxfer)}, order=S.OPE_ATTRIBUTE_ORDER)
-    saved = editor.save(output, input_path=input_path)
+    saved = editor.save_to(output, input_path, backup_dir)
     s.count("Transfers linked", len(pairs))
     s.count("Transactions changed", saved.replaced)
-    s.output("New copy", saved.path)
-    s.note("Your original file was not changed. Open the new copy in HomeBank, check the transfers,")
-    s.note("and use the copy once you are happy with it (keep the original as a backup).")
+    describe_save(s, saved, "the transfers")
     return s, saved.path
