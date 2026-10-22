@@ -5,6 +5,8 @@ runs pluggable analyses and writes targeted changes to a *new copy* of the file.
 The owner runs it on their real file; Claude builds and tests it and never sees
 the real data.
 
+New session or new account? Read `docs/handover.md` for context from earlier sessions.
+
 ## Privacy rules (non-negotiable)
 
 1. **`data/` is private.** The owner's real `.xhb` lives in `data/`; results go to
@@ -115,7 +117,8 @@ hbkit/ui/static/             the page (index.html, app.js, style.css); no extern
 hbkit/fixtures/generator.py  synthetic .xhb files for tests and trying things out
 hbkit/fixtures/statement_pdf.py  synthetic PDF bank statements (made-up content, three font variants)
 tests/                       unittest; fixtures/homebank_example = HomeBank's own example.xhb (GPL)
-docs/                        xhb-format.md, import-files.md, sqlite-schema.md, adding-an-analysis.md
+docs/                        xhb-format.md, import-files.md, sqlite-schema.md, adding-an-analysis.md,
+                             handover.md (context for a new session)
 ```
 
 ## Adding a report
